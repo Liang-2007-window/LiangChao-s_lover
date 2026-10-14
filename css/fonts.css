@@ -1,0 +1,9 @@
+/* 展示字体：思源黑体 SC Black（SIL OFL 开源许可），只保留页面用到的 75 个字，约 20KB。
+   不依赖任何外部网站，国内也能秒开。其余文字使用系统字体。 */
+@font-face {
+  font-family: 'Display';
+  src: url('../fonts/display-black.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}

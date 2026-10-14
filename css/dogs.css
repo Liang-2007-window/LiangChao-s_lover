@@ -1,0 +1,115 @@
+/* ============================================
+   小狗角色样式
+   ============================================ */
+
+.dog {
+  display: block;
+  overflow: visible;
+}
+
+/* 统一的描边 */
+.dog .o {
+  stroke: var(--line);
+  stroke-width: 3.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.dog .o-fill path,
+.dog .o-fill rect {
+  stroke: var(--line);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.dog .toe {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+.dog .eye-line {
+  fill: none;
+  stroke: #3A2318;
+  stroke-width: 3.6;
+  stroke-linecap: round;
+}
+.dog .mouth-line {
+  fill: none;
+  stroke: #3A2318;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* —— 眼睛：跟随鼠标（由脚本设置 --dx / --dy）—— */
+.dog .eyes {
+  transform: translate(var(--dx, 0px), var(--dy, 0px));
+  transition: transform 0.12s ease-out;
+}
+
+/* —— 眨眼 —— */
+.dog .eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dog-blink 4.6s infinite;
+  animation-delay: var(--blink, 0s);
+}
+@keyframes dog-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.08); }
+}
+
+/* —— 耳朵轻轻抖一下 —— */
+.dog .ear {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.dog .ear-l { animation: dog-ear-l 6s ease-in-out infinite; animation-delay: var(--ear, 0s); }
+.dog .ear-r { animation: dog-ear-r 6s ease-in-out infinite; animation-delay: calc(var(--ear, 0s) + 1.3s); }
+@keyframes dog-ear-l {
+  0%, 86%, 100% { transform: rotate(0deg); }
+  90% { transform: rotate(-9deg); }
+  94% { transform: rotate(2deg); }
+}
+@keyframes dog-ear-r {
+  0%, 86%, 100% { transform: rotate(0deg); }
+  90% { transform: rotate(9deg); }
+  94% { transform: rotate(-2deg); }
+}
+.dog-pup .ear-l { transform-origin: 80% 10%; }
+.dog-pup .ear-r { transform-origin: 20% 10%; }
+
+/* —— 摇尾巴 —— */
+.dog .tail {
+  transform-box: view-box;
+  transform-origin: 138px 198px;
+  animation: dog-wag 0.7s ease-in-out infinite alternate;
+}
+@keyframes dog-wag {
+  from { transform: rotate(-10deg); }
+  to { transform: rotate(14deg); }
+}
+
+/* —— 开心跳一下（答对时由脚本加 .hop）—— */
+.dog.hop { animation: dog-hop 0.55s cubic-bezier(.3, 1.6, .5, 1) 3; }
+@keyframes dog-hop {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  40% { transform: translateY(-22px) scale(0.96, 1.06); }
+  75% { transform: translateY(0) scale(1.06, 0.94); }
+}
+
+/* —— 歪头（答错时由脚本加 .tilt）—— */
+.dog .dog-head {
+  transform-box: view-box;
+  transform-origin: 100px 120px;
+}
+.dog.tilt .dog-head { animation: dog-tilt 1.1s ease-in-out; }
+@keyframes dog-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  25%, 70% { transform: rotate(-11deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dog .tail,
+  .dog .ear,
+  .dog .eye { animation: none !important; }
+}
