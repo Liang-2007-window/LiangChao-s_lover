@@ -41,6 +41,7 @@ svg { display: block; overflow: visible; }
   opacity: 0;
   transition: opacity 1.6s ease, visibility 0s 1.6s;
   overflow: hidden;
+  overflow: clip;            /* 比 hidden 更彻底：连脚本/焦点触发的滚动也不允许，场景不会被"挤歪" */
 }
 .scene.active {
   visibility: visible;
@@ -597,6 +598,196 @@ svg { display: block; overflow: visible; }
 @keyframes eq { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
 .music-info.paused .eq i { animation-play-state: paused !important; transform: scaleY(.3); }
 
+/* ----- 登录入口（黄昏场景下部） ----- */
+.login {
+  --kb: 0px;                       /* 手机软键盘高度，由 login.js 写入 */
+  position: absolute;
+  left: 50%;
+  bottom: max(6.5vh, calc(env(safe-area-inset-bottom) + 20px));
+  z-index: 12;
+  width: min(450px, calc(100vw - 32px));
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 18px);
+  transition: opacity 1.4s ease, transform 1.4s cubic-bezier(.2, .7, .2, 1);
+}
+.login.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, calc(var(--kb) * -1));
+}
+.login.visible.kb-open { transition: transform .25s ease; }
+
+.login-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  font: 500 .82rem/1 var(--font-body);
+  letter-spacing: .5em;
+  text-indent: .5em;
+  color: rgba(255, 255, 255, .94);
+  text-shadow: 0 1px 12px rgba(60, 20, 50, .6);
+}
+.login-title::before, .login-title::after {
+  content: '';
+  width: 36px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .8));
+}
+.login-title::after { transform: scaleX(-1); }
+
+.login-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, .13));
+  border: 1px solid rgba(255, 255, 255, .55);
+  border-radius: 999px;
+  box-shadow: 0 12px 34px rgba(40, 10, 50, .34), inset 0 1px 0 rgba(255, 255, 255, .5);
+  -webkit-backdrop-filter: blur(10px) saturate(1.25);
+  backdrop-filter: blur(10px) saturate(1.25);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .login-form { background: rgba(70, 36, 74, .55); }
+}
+
+.login-field { position: relative; flex: 1 1 0; min-width: 0; }
+.login-input {
+  display: block;
+  width: 100%;
+  height: 46px;
+  padding: 0 18px;
+  font: 500 1rem var(--font-body);     /* 16px：避免 iPhone 聚焦时自动放大页面 */
+  letter-spacing: .06em;
+  color: #fff;
+  background: rgba(46, 18, 54, .34);
+  border: 1px solid rgba(255, 255, 255, .26);
+  border-radius: 999px;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+}
+.login-input.has-eye { padding-right: 46px; }
+.login-input::placeholder { color: rgba(255, 255, 255, .72); letter-spacing: .3em; }
+.login-input:focus {
+  background: rgba(46, 18, 54, .46);
+  border-color: rgba(255, 255, 255, .9);
+  box-shadow: 0 0 0 3px rgba(255, 214, 107, .38);
+}
+.login-input:focus::placeholder { color: rgba(255, 255, 255, .45); }
+.login-input:-webkit-autofill {
+  -webkit-text-fill-color: #fff;
+  caret-color: #fff;
+  transition: background-color 9999s ease 0s;
+  box-shadow: inset 0 0 0 50px rgba(70, 36, 74, .85);
+}
+
+.login-eye {
+  position: absolute;
+  top: 50%; right: 5px;
+  display: grid;
+  place-items: center;
+  width: 36px; height: 36px;
+  margin-top: -18px;
+  padding: 0;
+  color: rgba(255, 255, 255, .78);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease;
+}
+.login-eye:hover { color: #fff; background: rgba(255, 255, 255, .14); }
+.login-eye:focus-visible { outline: 2px solid #FFD66B; outline-offset: 1px; }
+.login-eye .eye-off { display: none; }
+.login-eye[aria-pressed="true"] .eye-on { display: none; }
+.login-eye[aria-pressed="true"] .eye-off { display: block; }
+
+.login-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 20px 0 24px;
+  font: 700 .98rem var(--font-body);
+  letter-spacing: .22em;
+  color: #fff;
+  background: linear-gradient(180deg, #FF8E7F 0%, var(--coral-deep) 100%);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(232, 88, 75, .45), inset 0 1px 0 rgba(255, 255, 255, .42);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform .15s ease, box-shadow .15s ease, filter .2s ease;
+}
+.login-btn svg { transition: transform .2s ease; }
+.login-btn:hover { filter: brightness(1.06); }
+.login-btn:hover svg { transform: translateX(3px); }
+.login-btn:active { transform: translateY(2px); box-shadow: 0 2px 8px rgba(232, 88, 75, .4), inset 0 1px 0 rgba(255, 255, 255, .3); }
+.login-btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.login-btn:disabled { opacity: .7; cursor: default; }
+
+.login-msg {
+  min-height: 1.5em;
+  margin-top: 12px;
+  font: 500 .86rem/1.5 var(--font-body);
+  letter-spacing: .08em;
+  color: #fff;
+  text-shadow: 0 1px 10px rgba(60, 20, 50, .75);
+}
+
+.login-msg.is-error { color: #FFE6DF; }
+.login-msg.is-ok { color: #fff; font-weight: 700; letter-spacing: .14em; }
+
+/* 输错时整条左右抖一下 */
+.login-form.shake { animation: login-shake .5s ease-in-out; }
+@keyframes login-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-9px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(4px); }
+}
+
+/* 验证中：按钮里的箭头换成转圈 */
+.login-btn { min-width: 108px; }
+.login-btn.busy { opacity: .85; cursor: progress; }
+.login-btn.busy svg { display: none; }
+.login-btn.busy::after {
+  content: '';
+  width: 15px; height: 15px;
+  border: 2px solid rgba(255, 255, 255, .45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: login-spin .7s linear infinite;
+}
+@keyframes login-spin { to { transform: rotate(360deg); } }
+
+/* 登录成功：整页淡成日记页的纸色，再跳转 */
+.login-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #F6F0E6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .9s ease;
+}
+.login-veil.on { opacity: 1; pointer-events: auto; }
+
+/* 宽屏：单车往左让出中间位置给登录入口 */
+@media (min-width: 761px) {
+  .bike-rig { left: 6%; }
+}
+/* 平板等中等宽度：左右放不下，登录入口整体抬到单车上方 */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .login { bottom: calc(4.2vh + clamp(125px, 16.25vw, 225px) + 20px); }
+}
+
 /* ============================================
    小屏幕
    ============================================ */
@@ -604,7 +795,7 @@ svg { display: block; overflow: visible; }
 @media (max-width: 760px) {
   :root { --hz: 38%; --shore: 63%; }
 
-  .card-wrap { top: 37%; }
+  .card-wrap { top: max(37%, 270px); }   /* 矮屏手机：给卡片上沿的小狗和气泡留出位置，别被顶出屏幕 */
   .card-inner { padding: 22px 16px 20px; }
   .question-text { margin-bottom: 18px; }
   .lighthouse { left: 5%; }
@@ -629,19 +820,54 @@ svg { display: block; overflow: visible; }
   .bike-rig { left: 3%; width: 58vw; bottom: 3vh; }
   .love-container { top: 21%; }
   .love-text { font-size: 24vw; gap: 2.4vw; }
+  .login { bottom: calc(3vh + 36.25vw + 18px); }   /* 停在单车上方 */
 }
 
 @media (max-width: 480px) {
   .input-group { flex-direction: column; align-items: stretch; }
   .answer-input, .submit-btn { width: 100%; }
   .question-title { letter-spacing: .24em; }
+
+  /* 手机竖屏：账号、密码、按钮上下排开，方便单手点按 */
+  .login-form { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; border-radius: 28px; }
+  .login-field { flex: none; }
+  .login-btn { width: 100%; }
+}
+
+/* 手机竖屏且屏幕偏矮（如 iPhone SE）：把登录框压紧一点，别顶到「我爱你」 */
+@media (max-width: 480px) and (max-height: 700px) {
+  .login-title { margin-bottom: 8px; }
+  .login-form { gap: 8px; padding: 10px; }
+  .login-input, .login-btn { height: 42px; }
+  .login-msg { margin-top: 8px; min-height: 1.4em; }
 }
 
 @media (max-height: 560px) and (orientation: landscape) {
-  .card-wrap { top: 46%; }
+  .card-wrap { top: 52%; }
   .peek-slot { width: 100px; }
   .question-text { font-size: 1.25rem; margin-bottom: 12px; }
   .card-inner { padding: 14px 18px 14px; }
+
+  /* 黄昏场景：「我爱你」在上，单车在左下，登录入口放右下 */
+  .love-container { top: 7%; }
+  .love-text { font-size: clamp(54px, 24vh, 110px); gap: 2vw; }
+  .bike-rig { left: 3%; width: clamp(150px, 42vh, 230px); bottom: 4vh; }
+  .st-3, .st-4 { display: none; }
+  /* 音乐按钮缩成只剩图标，给登录入口让位 */
+  .music-info { padding: 9px 12px; }
+  #music-label { display: none; }
+  .login {
+    left: auto;
+    right: calc(max(16px, env(safe-area-inset-right)) + 62px);
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: min(400px, 56vw);
+    transform: translate(0, 18px);
+  }
+  .login.visible { transform: translate(0, calc(var(--kb) * -1)); }
+  .login-title { margin-bottom: 8px; font-size: .76rem; }
+  .login-form { padding: 6px; }
+  .login-input, .login-btn { height: 40px; }
+  .login-msg { margin-top: 6px; min-height: 1.3em; font-size: .8rem; }
 }
 
 /* ============================================
@@ -655,6 +881,9 @@ svg { display: block; overflow: visible; }
     animation: none !important;
   }
   .scene, .scene.active { transition-duration: .3s; transition-delay: 0s; }
+  .login { transition-duration: .3s; }
+  .login-form.shake, .login-btn.busy::after { animation-duration: .01s; }
+  .login-veil { transition-duration: .2s; }
   .glint { opacity: .8; }
   .crab { left: 30%; }
 }

@@ -353,6 +353,11 @@
       setTimeout(function () { el.classList.add('visible'); }, delays[i]);
     });
     setTimeout(function () { loveText.classList.add('breathing'); }, 4200);
+    // 「我爱你」都出来、站稳之后，登录入口再轻轻浮现
+    setTimeout(function () {
+      var login = document.getElementById('login');
+      if (login) login.classList.add('visible');
+    }, 4600);
   }
 
   // ==================== 飘起的爱心 ====================
@@ -414,7 +419,8 @@
   // ==================== 键盘 / 可见性 ====================
   document.addEventListener('keydown', function (e) {
     if (e.code !== 'Space' || !transitionDone || !bgm || !bgm.paused) return;
-    if (e.target === musicBtn) return;
+    // 在输入框里打空格、或在按钮上按空格，都不能被"恢复音乐"抢走
+    if (e.target && e.target.closest && e.target.closest('input, textarea, select, button, a, [contenteditable]')) return;
     e.preventDefault();
     userPaused = false;
     bgm.play().then(function () { fadeInVolume(bgm, MUSIC_VOLUME, 800); }).catch(function () {});
@@ -430,6 +436,11 @@
       if (bgm && pausedByHidden && !userPaused) bgm.play().catch(function () {});
       pausedByHidden = false;
     }
+  });
+
+  // 旧浏览器不支持 overflow: clip 时的保险：场景一旦被滚歪（草地比屏幕宽），立刻拨回原位
+  document.querySelectorAll('.scene').forEach(function (s) {
+    s.addEventListener('scroll', function () { s.scrollLeft = 0; s.scrollTop = 0; }, { passive: true });
   });
 
   // ==================== 启动 ====================

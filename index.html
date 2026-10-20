@@ -374,6 +374,28 @@
 
     <div class="hearts-area" id="hearts-area" aria-hidden="true"></div>
 
+    <!-- 登录入口：「我爱你」出现之后淡入，通往日记页 -->
+    <section class="login" id="login" aria-labelledby="login-title">
+      <p class="login-title" id="login-title">我们的日记</p>
+      <form class="login-form" id="login-form" autocomplete="on" novalidate>
+        <div class="login-field">
+          <input class="login-input" id="login-user" name="username" type="text" placeholder="账号" aria-label="账号" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next" maxlength="32">
+        </div>
+        <div class="login-field">
+          <input class="login-input has-eye" id="login-pass" name="password" type="password" placeholder="密码" aria-label="密码" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" maxlength="64">
+          <button class="login-eye" id="login-eye" type="button" aria-label="显示密码" aria-pressed="false">
+            <svg class="eye-on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/><path d="M3.5 3.5l17 17"/></svg>
+          </button>
+        </div>
+        <button class="login-btn" id="login-btn" type="submit">
+          <span>进入</span>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </button>
+      </form>
+      <p class="login-msg" id="login-msg" role="status" aria-live="polite"></p>
+    </section>
+
     <button type="button" class="music-info" id="music-info" aria-label="暂停音乐" disabled>
       <span class="eq" id="music-icon" aria-hidden="true"><i></i><i></i><i></i></span>
       <span id="music-label">正在播放...</span>
@@ -386,5 +408,8 @@
 
   <script src="js/dogs.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/auth-config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/login.js"></script>
 </body>
 </html>

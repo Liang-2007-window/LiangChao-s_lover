@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#F6F0E6">
+  <title>我们的日记</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%96%3C/text%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/serif-light.woff" as="font" type="font/woff" crossorigin>
+  <!-- 先把底色铺好，避免从登录页淡过来时闪一下白 -->
+  <style>html, body { background: #F6F0E6; }</style>
+  <link rel="stylesheet" href="css/diary.css">
+</head>
+<body>
+
+  <div class="progress" id="progress" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <button class="link-btn" id="logout-top" type="button">退出登录</button>
+  </header>
+
+  <main class="page">
+    <section class="masthead" aria-labelledby="diary-title">
+      <svg class="mark" viewBox="0 0 32 30" width="20" height="19" aria-hidden="true"><path d="M16,28 C-6,14 4,-4 16,8 C28,-4 38,14 16,28 Z" fill="currentColor"/></svg>
+      <h1 class="title" id="diary-title">我们的日记</h1>
+      <p class="sub" id="sub" aria-live="polite"></p>
+      <button class="pill sort" id="sort" type="button" data-order="new" hidden>
+        <span id="sort-label">最新在前</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+      </button>
+    </section>
+
+    <div class="state" id="state" role="status" aria-live="polite"></div>
+
+    <div class="entries" id="entries"></div>
+
+    <footer class="end" id="end" hidden>
+      <svg class="mark" viewBox="0 0 32 30" width="16" height="15" aria-hidden="true"><path d="M16,28 C-6,14 4,-4 16,8 C28,-4 38,14 16,28 Z" fill="currentColor"/></svg>
+      <p class="end-text">翻到底啦</p>
+      <div class="end-actions">
+        <button class="link-btn" id="to-top" type="button">回到顶部</button>
+        <span class="dot" aria-hidden="true"></span>
+        <button class="link-btn" id="logout-bottom" type="button">退出登录</button>
+      </div>
+    </footer>
+  </main>
+
+  <script src="js/auth-config.js"></script>
+  <script src="js/auth.js"></script>
+  <!-- 密文也放了一份成 js：直接双击打开（file://）时浏览器不让 fetch 读本地文件 -->
+  <script src="data/diary.enc.js"></script>
+  <script src="js/diary.js"></script>
+</body>
+</html>
