@@ -2,6 +2,15 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <!-- 网站开关：打烊时立刻转去停业页，不把首页露出来（改 js/site-config.js 即可） -->
+  <script src="js/site-config.js"></script>
+  <script>
+    (function () {
+      var cfg = window.SITE_CONFIG;
+      // 开关文件没加载到也按「打烊」处理，免得漏出去
+      if (!cfg || cfg.closed !== false) window.location.replace('closed.html');
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>夏日海岸</title>
   <meta name="description" content="夏日海岸：一道只有你知道答案的小问答。">
