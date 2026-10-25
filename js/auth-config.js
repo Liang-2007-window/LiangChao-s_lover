@@ -1,2 +1,2 @@
 /* 由 dev-tools/make-auth.mjs 生成，请勿手改。这里没有密码，只有每个账号的盐和校验值。 */
-window.AUTH_CONFIG = {"v":2,"kdf":"PBKDF2-SHA256","iter":600000,"accounts":{"liu":{"salt":"lJR31Ws98une9JhbYroBXw==","verify":"rYengvjXHtXPDZZPU/+rJWgNYH8Wa2vIWrIYOeiGK48=","blob":"data/diary.liu.enc.json"},"yangquan":{"salt":"l4a8mVNs0Ff2U0/plIZ94Q==","verify":"dTxO8OhmdokUmxa/8zeXj4JS+e5cyM9PP4j/H5j8mSk=","blob":"data/diary.yangquan.enc.json"}}};
+window.AUTH_CONFIG = {"v":2,"kdf":"PBKDF2-SHA256","iter":600000,"accounts":{"yangquan":{"salt":"l4a8mVNs0Ff2U0/plIZ94Q==","verify":"dTxO8OhmdokUmxa/8zeXj4JS+e5cyM9PP4j/H5j8mSk=","blob":"data/diary.yangquan.enc.json"},"liuke":{"salt":"l8NtY/qwokGMfGLI0Fjd7A==","verify":"wrOJM1rRfDQMR1/JVtJnrEf7cwC4rOYnDd5YBie371I=","blob":"data/diary.liuke.enc.json"}}};
