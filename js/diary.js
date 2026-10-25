@@ -1,7 +1,8 @@
 /**
  * 日记页：确认登录 → 解密日记 → 排版显示
  *
- * 日记内容在 data/diary.enc.json 里是加密的，登录后用会话里的密钥解开。
+ * 日记内容按账号分开：data/diary.<账号>.enc.json（以及给 file:// 用的 data/diary.blobs.js），
+ * 每个账号用自己的密码派生出的密钥解开，互相看不到。
  * 每篇日记的格式（date 和 body 必填，其余选填）：
  *   { "date": "2026-10-17", "title": "标题", "weather": "晴", "mood": "开心", "body": "正文\n\n空一行是新的一段" }
  * 页面上所有文字都用 textContent 写入，日记里即使出现 < > 之类的符号也只会当普通文字显示。
@@ -10,7 +11,6 @@
   'use strict';
 
   var LOGIN_URL = 'index.html';
-  var DATA_URL = 'data/diary.enc.json';
   var SORT_KEY = 'ld_diary_sort';
   var WEEK = '日一二三四五六';
 
@@ -20,6 +20,13 @@
 
   // 没登录（或登录已过期）就回登录页
   if (!window.Auth || !window.Auth.isLoggedIn()) { toLogin(); return; }
+
+  // 标题上带一下账号名，免得两个账号的日记混在一起看迷糊
+  var me = window.Auth.currentUser();
+  if (me) {
+    document.title = '我们的日记 · ' + me;
+    document.body.setAttribute('data-account', me);
+  }
 
   var $ = function (id) { return document.getElementById(id); };
   var entriesEl = $('entries');
@@ -173,7 +180,7 @@
   // ---------- 加载 ----------
   function load() {
     showState('翻开中…', null, true);
-    window.Auth.loadEncrypted(DATA_URL).then(function (data) {
+    window.Auth.loadEncrypted().then(function (data) {
       if (!Array.isArray(data)) throw new Error('shape');
       list = data.filter(function (e) { return e && typeof e === 'object' && typeof e.body === 'string' && e.body.trim(); });
       if (!list.length) {
@@ -198,8 +205,8 @@
       // 密钥对不上：多半是密码改过了，或登录信息损坏
       showState('日记暂时打不开：登录信息已经失效，请重新登录。', [{ label: '重新登录', fn: relogin }]);
     } else if (name === 'TypeError' && /^file:/.test(window.location.protocol)) {
-      // file:// 下浏览器不允许 fetch 读本地文件，通常是没有一起放 data/diary.enc.js
-      showState('日记文件没读到：直接双击打开网页时，日记要跟着 data/diary.enc.js 一起读。请确认它就在网站目录里（或者用一个本地服务器打开）。', [{ label: '刷新试试', fn: function () { window.location.reload(); } }]);
+      // file:// 下浏览器不允许 fetch 读本地文件，通常是没有一起放 data/diary.blobs.js
+      showState('日记文件没读到：直接双击打开网页时，日记要跟着 data/diary.blobs.js 一起读。请确认它就在网站目录里（或者用一个本地服务器打开）。', [{ label: '刷新试试', fn: function () { window.location.reload(); } }]);
     } else if (name === 'TypeError' || /^http-/.test(msg)) {
       showState('网络好像不太稳定，日记没能加载出来。', [{ label: '再试一次', fn: load }]);
     } else {
