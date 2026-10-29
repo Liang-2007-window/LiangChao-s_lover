@@ -53,8 +53,9 @@ node server/cli.mjs plaza-rm <id>        # 删任意一条（作者自己也能�
 - **账号设置**（`settings.html`）：换绑邮箱、改密码，两者都要往**当前**邮箱发验证码确认；
   改密码后只保留当前设备的登录。
 - **防枚举**：找回密码时账号不存在也返回「已发送」；验证码只存 `sha256(email|purpose|code)`。
-- **限制**：同一邮箱每个用途 60 秒冷却、每小时 5 封；同一 IP 每小时 10 封验证码、3 次注册；
+- **限制**：同一邮箱每个用途 60 秒冷却、**15 分钟**内最多 5 封；同一 IP 15 分钟内 10 封验证码、3 次注册；
   验证码最多试 5 次；单账号最多 500 篇 / 5 MB 密文。
+  发信失败的次数单独记，**不占用户额度**——邮件发不出去时不会把人越锁越久（这条是给「等 3000 秒」那个 bug 用的）。
 
 ### 配置发验证码的邮箱（QQ 邮箱）
 
@@ -70,6 +71,19 @@ sudo bash /srv/liangchao/app/deploy/smtp-setup.sh 1373917993@qq.com <授权码>
 线上当前用的是小号邮箱 `liangchao_070626@qq.com` 发信（发件人显示「我们的小站」）。
 它只用来发验证码，不读信，授权码泄露了随时在 QQ 邮箱里吊销重生成。
 
+**「说发出去了但没收到」怎么查**：
+
+1. 先翻收件人的垃圾箱 / 「广告邮件」分类——QQ 邮箱对陌生发件人的首封信偶尔会这么放。
+2. 服务器上有 `mail-test`，会真发一封：
+   ```bash
+   runuser -u www-data -- env LD_ENV_FILE=/etc/liangchao.env \
+     /usr/local/bin/node /srv/liangchao/app/server/cli.mjs mail-test 收件地址
+   ```
+   打印 `ok: the SMTP server accepted the message` 说明是我们这边交出去了；
+   收不到就是收件方丢了（垃圾箱、拦截规则、地址写错），不是服务端问题。
+3. 服务日志里有 `[mail] sent purpose=... to=域名` 和 `[mail] failed ... err=...`，
+   区分「我们发了」和「我们没发」。日志不记验证码本身。
+
 ## 广场
 
 `plaza.html`：登录之后所有人都能看见的一面墙，和日记正好相反。
@@ -79,8 +93,8 @@ sudo bash /srv/liangchao/app/deploy/smtp-setup.sh 1373917993@qq.com <授权码>
 - **存储**：广场内容**明文**存进 `plaza` 表——它本来就是公开的，明文让翻页不必逐条解密。
   日记正文仍是 AES-256-GCM 密文，两者不要混为一谈：**备份文件里的广场内容是能直接读的**。
 - **限制**：一条最多 500 字（`LD_PLAZA_MAXLEN`）、同一账号 20 秒内只能发一条
-  （`LD_PLAZA_COOLDOWN`）、每小时最多 20 条（`LD_PLAZA_HOURLY`）；列表每页 20 条（`LD_PLAZA_PAGE`，最多 50）。
-  限流按数据库里的发帖记录算，重启不会清零。
+  （`LD_PLAZA_COOLDOWN`）、15 分钟内最多 20 条（`LD_PLAZA_HOURLY`，窗口长度 `LD_PLAZA_WINDOW`）；
+  列表每页 20 条（`LD_PLAZA_PAGE`，最多 50）。限流按数据库里的发帖记录算，重启不会清零。
 - **不做**：回复、点赞、发图、渲染 HTML 或 Markdown。帖子里写的 `<b>` 只会当字面文字显示。
 - **清场**：作者自己删，或站长在服务器上 `node server/cli.mjs plaza-rm <id>`。
 

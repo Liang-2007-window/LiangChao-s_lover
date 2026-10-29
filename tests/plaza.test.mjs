@@ -1,4 +1,4 @@
-// Plaza API tests. Boots the real server in-process against a throwaway DB.
+﻿// Plaza API tests. Boots the real server in-process against a throwaway DB.
 // Run with: node tests/plaza.test.mjs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -207,15 +207,15 @@ test('an hourly ceiling applies even without a cooldown', async () => {
   stmt.accountInsert.run('Chatty', await hashPassword(PASSWORD), Date.now());
   await login('Chatty');
 
-  config.plazaPerHour = 2;
+  config.plazaMaxPerWindow = 2;
   try {
     assert.equal((await call('Chatty', 'POST', '/api/plaza', { body: { body: 'a' } })).status, 201);
     assert.equal((await call('Chatty', 'POST', '/api/plaza', { body: { body: 'b' } })).status, 201);
     const third = await call('Chatty', 'POST', '/api/plaza', { body: { body: 'c' } });
     assert.equal(third.status, 429);
     assert.equal(third.json.error, 'too_many');
-    assert.ok(third.json.retryAfter > 0 && third.json.retryAfter <= 3600);
+    assert.ok(third.json.retryAfter > 0 && third.json.retryAfter <= config.plazaWindowSec);
   } finally {
-    config.plazaPerHour = 100;
+    config.plazaMaxPerWindow = 100;
   }
 });

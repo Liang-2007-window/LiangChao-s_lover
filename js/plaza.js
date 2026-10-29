@@ -212,7 +212,7 @@
       if (err.error === 'empty_post') { msg('写点什么再发吧', 'error'); return; }
       if (err.error === 'too_long') { msg('太长了，最多 ' + MAX + ' 字', 'error'); return; }
       if (err.status === 429 && err.error === 'too_fast') { cooldown(err.retryAfter, '刚发过一条，歇一会儿'); return; }
-      if (err.status === 429) { cooldown(err.retryAfter, '这一小时发得有点多'); return; }
+      if (err.status === 429) { cooldown(err.retryAfter, '这一会儿发得有点多'); return; }
       msg('没发出去，再点一次试试', 'error');
     });
   }

@@ -78,7 +78,7 @@
       $('sent-to').textContent = res.email || data.email;
       UI.msg(msgEl, '');
       showStep('code');
-      UI.msg(msgCodeEl, '');
+      UI.msg(msgCodeEl, UI.TEXT.sent, 'ok');
       if (res.retryAfter) UI.countdown(resendBtn, res.retryAfter, '重新发送');
     }, function (err) {
       UI.msg(msgEl, UI.errorText(err), 'error');
@@ -116,7 +116,7 @@
     if (resendBtn.disabled) return;
     UI.msg(msgCodeEl, '正在重新发送…');
     window.Auth.requestCode('register', account).then(function (res) {
-      UI.msg(msgCodeEl, '新的验证码已经发出去了', 'ok');
+      UI.msg(msgCodeEl, '新的验证码已经发出去了，' + UI.TEXT.sent, 'ok');
       UI.countdown(resendBtn, (res && res.retryAfter) || 60, '重新发送');
     }, function (err) {
       UI.msg(msgCodeEl, UI.errorText(err), 'error');

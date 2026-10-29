@@ -169,6 +169,11 @@ export const stmt = {
     `SELECT COUNT(*) AS n FROM email_codes
      WHERE email = ? COLLATE NOCASE AND purpose = ? AND created_at > ?`
   ),
+  codeOldestRecent: db.prepare(
+    `SELECT created_at FROM email_codes
+     WHERE email = ? COLLATE NOCASE AND purpose = ? AND created_at > ?
+     ORDER BY created_at ASC, id ASC LIMIT 1`
+  ),
   // Cooldown is measured from the last code sent, used or not, so redeeming a
   // code cannot be used to skip the "one per minute" rule.
   codeLastCreated: db.prepare(
@@ -178,6 +183,9 @@ export const stmt = {
   ),
   codeBumpAttempts: db.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE id = ?'),
   codeMarkUsed: db.prepare('UPDATE email_codes SET used_at = ? WHERE id = ?'),
+  // A code whose mail never left the server is not a real send: the row goes away
+  // again so the cooldown and the quota are not spent on a message nobody got.
+  codeDelete: db.prepare('DELETE FROM email_codes WHERE id = ?'),
   codePurge: db.prepare('DELETE FROM email_codes WHERE created_at < ?'),
 
   failGet: db.prepare('SELECT * FROM login_fails WHERE lkey = ?'),

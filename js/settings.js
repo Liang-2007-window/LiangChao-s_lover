@@ -45,7 +45,7 @@
     UI.busy(btn, true, '发送中…');
     UI.msg(msgEl, '正在发送…');
     window.Auth.requestCode(purpose, account).then(function (res) {
-      UI.msg(msgEl, '验证码已经发到 ' + (currentEmail || '你的邮箱') + ' 了', 'ok');
+      UI.msg(msgEl, '验证码已经发到 ' + (currentEmail || '你的邮箱') + ' 了，收不到先翻翻垃圾箱', 'ok');
       UI.countdown(btn, (res && res.retryAfter) || 60, '发验证码');
     }, function (err) {
       UI.msg(msgEl, UI.errorText(err), 'error');

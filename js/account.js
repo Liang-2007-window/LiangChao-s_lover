@@ -19,6 +19,7 @@
     too_soon: '刚发过一封，等一会儿再发',
     too_many: '操作太频繁了，歇一会儿再试',
     mail_unavailable: '邮件服务暂时发不出去，稍后再试或联系管理员',
+    sent: '验证码已经发出，收不到先翻翻垃圾箱和「广告邮件」分类',
     already_verified: '这个账号已经验证过了，直接登录就好',
     unauthorized: '登录状态过期了，重新登录一下',
     no_email: '这个账号还没绑定邮箱',
@@ -35,11 +36,20 @@
     el.className = 'msg' + (kind ? ' is-' + kind : '');
   }
 
+  /**
+   * 「还要等 3000 秒」是给人看的吗？超过一分半就换成分钟，别让人自己除。
+   */
+  function waitText(seconds) {
+    var s = Math.max(0, Math.ceil(Number(seconds) || 0));
+    if (s <= 90) return s + ' 秒';
+    return Math.ceil(s / 60) + ' 分钟';
+  }
+
   function errorText(err) {
     if (!err) return TEXT.network;
     if (err.status === 0) return TEXT.network;
     if (err.status === 429 && err.retryAfter) {
-      return '操作太频繁了，' + err.retryAfter + ' 秒后再试';
+      return '操作太频繁了，等 ' + waitText(err.retryAfter) + '再试';
     }
     if (err.status === 410 && err.error === 'code_expired') return TEXT.code_expired;
     return TEXT[err.error] || ('出错了（' + err.status + '），稍后再试');
@@ -68,7 +78,7 @@
       return;
     }
     btn.disabled = true;
-    btn.textContent = left + ' 秒';
+    btn.textContent = waitText(left) + '后重发';
     var timer = setInterval(function () {
       left -= 1;
       if (left <= 0) {
@@ -76,7 +86,7 @@
         btn.disabled = false;
         btn.textContent = idle;
       } else {
-        btn.textContent = left + ' 秒';
+        btn.textContent = waitText(left) + '后重发';
       }
     }, 1000);
   }
@@ -106,6 +116,7 @@
     TEXT: TEXT,
     msg: msg,
     errorText: errorText,
+    waitText: waitText,
     busy: busy,
     countdown: countdown,
     val: val,

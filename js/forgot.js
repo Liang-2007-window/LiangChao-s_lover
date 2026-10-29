@@ -28,7 +28,7 @@
     UI.msg(msgEl, '正在发送…');
 
     window.Auth.requestCode('reset', account).then(function (res) {
-      UI.msg(msgEl, '如果这个账号绑了邮箱，验证码已经发出去了', 'ok');
+      UI.msg(msgEl, '如果这个账号绑了邮箱，验证码已经发出去了（收不到先翻翻垃圾箱）', 'ok');
       UI.countdown(sendBtn, (res && res.retryAfter) || 60, '发送验证码');
       $('code').focus();
     }, function (err) {

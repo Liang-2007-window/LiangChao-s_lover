@@ -428,3 +428,76 @@ test('an account cannot store more entries than its quota', async () => {
   assert.equal(over.status, 409);
   assert.equal(over.json.error, 'quota_exceeded');
 });
+
+test('a mail that never leaves costs neither the quota nor the cooldown', async () => {
+  const { config } = await import('../server/config.mjs');
+  await call('POST', '/api/auth/logout');
+  const saved = { ...config };
+  // Point the SMTP client at a closed port: the send fails instantly, which is
+  // the "server says sent, mailbox stays empty" case from the other direction.
+  Object.assign(config, {
+    codeCooldownSec: 60,
+    smtpUser: 'nobody@example.com',
+    smtpPass: 'x',
+    smtpHost: '127.0.0.1',
+    smtpPort: 1,
+    smtpTls: false,
+  });
+  try {
+    const body = { account: 'MailFail', email: 'fail@example.com', password: 'abc12345' };
+    const first = await call('POST', '/api/auth/register', { body });
+    assert.equal(first.status, 503);
+    assert.equal(first.json.error, 'mail_unavailable');
+    // The pending row is debris when no code went out, and the code row must be
+    // gone too - otherwise the 60s cooldown starts for a mail nobody got.
+    assert.equal(stmt.accountByName.get('MailFail'), undefined);
+    assert.equal(stmt.codeLastCreated.get('fail@example.com', 'register'), undefined);
+
+    config.smtpUser = ''; // back to the in-memory dev outbox
+    const second = await call('POST', '/api/auth/register', { body });
+    assert.equal(second.status, 201);
+    assert.equal(second.json.pending, true);
+  } finally {
+    Object.assign(config, {
+      codeCooldownSec: saved.codeCooldownSec,
+      codeMaxPerEmailPerWindow: saved.codeMaxPerEmailPerWindow,
+      smtpUser: saved.smtpUser,
+      smtpPass: saved.smtpPass,
+      smtpHost: saved.smtpHost,
+      smtpPort: saved.smtpPort,
+      smtpTls: saved.smtpTls,
+    });
+  }
+});
+
+test('code limits are bounded by a 15 minute window', async () => {
+  const { hashPassword } = await import('../server/security.mjs');
+  const { config } = await import('../server/config.mjs');
+
+  stmt.accountInsert.run('Quota', await hashPassword('abc12345'), Date.now());
+  const quota = stmt.accountByName.get('Quota');
+  stmt.accountSetEmailVerified.run('quota@example.com', Date.now(), quota.id);
+
+  const saved = { ...config };
+  Object.assign(config, { codeCooldownSec: 0, codeMaxPerEmailPerWindow: 2 });
+  try {
+    const body = { purpose: 'reset', account: 'Quota' };
+    assert.equal((await call('POST', '/api/auth/code', { body })).status, 200);
+    assert.equal((await call('POST', '/api/auth/code', { body })).status, 200);
+    const third = await call('POST', '/api/auth/code', { body });
+    assert.equal(third.status, 429);
+    assert.equal(third.json.error, 'too_many');
+    // The old code answered "wait up to an hour", which the page printed as
+    // "3000 seconds later". Never again.
+    assert.ok(third.json.retryAfter > 0);
+    assert.ok(
+      third.json.retryAfter <= config.codeWindowSec,
+      `retryAfter ${third.json.retryAfter}s exceeds the ${config.codeWindowSec}s window`
+    );
+  } finally {
+    Object.assign(config, {
+      codeCooldownSec: saved.codeCooldownSec,
+      codeMaxPerEmailPerWindow: saved.codeMaxPerEmailPerWindow,
+    });
+  }
+});

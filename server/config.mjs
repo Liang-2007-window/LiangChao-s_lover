@@ -67,10 +67,15 @@ export const config = {
 
   codeTtlSec: 600, // a code lives 10 minutes
   codeCooldownSec: Number(process.env.LD_CODE_COOLDOWN ?? 60),
-  codeMaxPerEmailPerHour: Number(process.env.LD_CODE_HOURLY ?? 5),
-  codeMaxPerIpPerHour: Number(process.env.LD_CODE_IP_HOURLY ?? 10),
+  // Rate-limit windows are 15 minutes, not an hour: the envelope is what stops
+  // abuse, but an hour-long lockout is what makes someone wait 3000 seconds
+  // because a mail got lost. Worst case here is a 15 minute wait.
+  codeWindowSec: Number(process.env.LD_CODE_WINDOW ?? 900),
+  codeMaxPerEmailPerWindow: Number(process.env.LD_CODE_HOURLY ?? 5),
+  codeMaxPerIpPerWindow: Number(process.env.LD_CODE_IP_HOURLY ?? 10),
+  codeMaxSendFailures: 3, // failed SMTP attempts do not burn the quota above
   codeMaxAttempts: 5,
-  registerMaxPerIpPerHour: Number(process.env.LD_REG_HOURLY ?? 3),
+  registerMaxPerIpPerWindow: Number(process.env.LD_REG_HOURLY ?? 3),
   mailTimeoutMs: 10_000,
   mailMaxConcurrent: 2,
 
@@ -89,6 +94,7 @@ export const config = {
   // characters; the cooldown and the hourly ceiling are what keep it sane.
   plazaMaxLen: Number(process.env.LD_PLAZA_MAXLEN ?? 500),
   plazaCooldownSec: Number(process.env.LD_PLAZA_COOLDOWN ?? 20),
-  plazaPerHour: Number(process.env.LD_PLAZA_HOURLY ?? 20),
+  plazaWindowSec: Number(process.env.LD_PLAZA_WINDOW ?? 900),
+  plazaMaxPerWindow: Number(process.env.LD_PLAZA_HOURLY ?? 20),
   plazaPageSize: Number(process.env.LD_PLAZA_PAGE ?? 20),
 };

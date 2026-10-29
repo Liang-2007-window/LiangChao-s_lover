@@ -269,7 +269,11 @@ async function quizAnswer(req, res) {
 async function register(req, res) {
   guardWrite(req);
   const ip = clientIp(req);
-  const limit = hitRate(`register:${ip}`, config.registerMaxPerIpPerHour, 3600_000);
+  const limit = hitRate(
+    `register:${ip}`,
+    config.registerMaxPerIpPerWindow,
+    config.codeWindowSec * 1000
+  );
   if (!limit.allowed) fail(429, 'too_many', { retryAfter: limit.retryAfter });
 
   const body = await readJson(req);
@@ -362,7 +366,7 @@ async function requestCode(req, res) {
 async function resetPassword(req, res) {
   guardWrite(req);
   const ip = clientIp(req);
-  const limit = hitRate(`reset:${ip}`, 10, 3600_000);
+  const limit = hitRate(`reset:${ip}`, 10, config.codeWindowSec * 1000);
   if (!limit.allowed) fail(429, 'too_many', { retryAfter: limit.retryAfter });
 
   const body = await readJson(req);
@@ -476,10 +480,11 @@ async function createPlaza(req, res) {
     const wait = Math.ceil((last.created_at + config.plazaCooldownSec * 1000 - now) / 1000);
     fail(429, 'too_fast', { retryAfter: Math.max(1, wait) });
   }
-  const since = now - 3600_000;
-  if (stmt.plazaRecentByAccount.get(user.id, since).n >= config.plazaPerHour) {
+  const windowMs = config.plazaWindowSec * 1000;
+  const since = now - windowMs;
+  if (stmt.plazaRecentByAccount.get(user.id, since).n >= config.plazaMaxPerWindow) {
     const oldest = stmt.plazaOldestRecent.get(user.id, since);
-    const wait = oldest ? Math.ceil((oldest.created_at + 3600_000 - now) / 1000) : 3600;
+    const wait = oldest ? Math.ceil((oldest.created_at + windowMs - now) / 1000) : config.plazaWindowSec;
     fail(429, 'too_many', { retryAfter: Math.max(1, wait) });
   }
 

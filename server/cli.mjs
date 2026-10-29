@@ -195,6 +195,17 @@ function removePlaza(id) {
   console.log(`deleted plaza post ${id}`);
 }
 
+async function mailTest(address) {
+  if (!address || !address.includes('@')) die('usage: mail-test <address>');
+  const { sendTestMail } = await import('./mail.mjs');
+  try {
+    await sendTestMail(address);
+    console.log('ok: the SMTP server accepted the message');
+  } catch (err) {
+    die(`failed: ${err.message}`);
+  }
+}
+
 switch (command) {
   case 'plaza-list':
     listPlaza(args[0]);
@@ -217,6 +228,9 @@ switch (command) {
   case 'import-blob':
     importBlob(args[0], args[1], args[2]);
     break;
+  case 'mail-test':
+    await mailTest(args[0]);
+    break;
   case 'list':
     listAccounts();
     break;
@@ -228,7 +242,7 @@ switch (command) {
     break;
   default:
     console.log(
-      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune | plaza-list | plaza-rm'
+      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune | plaza-list | plaza-rm | mail-test'
     );
     process.exit(command ? 1 : 0);
 }

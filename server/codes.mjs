@@ -44,18 +44,29 @@ export async function issueCode({ email, accountId = null, purpose, name = '', i
   if (!PURPOSES.has(purpose)) fail(400, 'bad_purpose');
   const address = normalizeEmail(email);
   const now = Date.now();
+  const windowMs = config.codeWindowSec * 1000;
 
   const cooldown = secondsUntilResend(address, purpose, now);
   if (cooldown > 0) fail(429, 'too_soon', { retryAfter: cooldown });
 
-  const recent = stmt.codeRecent.get(address, purpose, now - 3600_000).n;
-  if (recent >= config.codeMaxPerEmailPerHour) fail(429, 'too_many', { retryAfter: 600 });
+  const recent = stmt.codeRecent.get(address, purpose, now - windowMs).n;
+  if (recent >= config.codeMaxPerEmailPerWindow) {
+    const oldest = stmt.codeOldestRecent.get(address, purpose, now - windowMs);
+    const wait = oldest ? oldest.created_at + windowMs - now : windowMs;
+    fail(429, 'too_many', { retryAfter: Math.ceil(wait / 1000) });
+  }
 
-  const perIp = hitRate(`code:${ip || 'unknown'}`, config.codeMaxPerIpPerHour, 3600_000, now);
+  const perIp = hitRate(`code:${ip || 'unknown'}`, config.codeMaxPerIpPerWindow, windowMs, now);
   if (!perIp.allowed) fail(429, 'too_many', { retryAfter: perIp.retryAfter });
 
+  // Broken SMTP is our fault, not the visitor's: failed sends are counted in
+  // their own bucket so we neither hammer the mailbox nor punish the user, and a
+  // successful send is never charged to it.
+  const failWait = sendFailureWait(address, now, windowMs);
+  if (failWait > 0) fail(429, 'mail_unavailable', { retryAfter: failWait });
+
   const code = generateCode();
-  stmt.codeInsert.run(
+  const info = stmt.codeInsert.run(
     address,
     accountId,
     purpose,
@@ -64,10 +75,35 @@ export async function issueCode({ email, accountId = null, purpose, name = '', i
     now
   );
 
-  // If the mail cannot be sent the row stays behind and simply expires; the
-  // caller retries after the cooldown.
-  await sendCode({ to: address, code, purpose, name });
+  try {
+    await sendCode({ to: address, code, purpose, name });
+  } catch (err) {
+    // Roll the row back, otherwise a mail that never arrived still costs the
+    // user a slot and pushes their wait towards a 50 minute lockout.
+    stmt.codeDelete.run(Number(info.lastInsertRowid));
+    noteSendFailure(address, now, windowMs);
+    throw err;
+  }
   return { retryAfter: config.codeCooldownSec, ttl: config.codeTtlSec };
+}
+
+// Failed SMTP attempts per address. In memory on purpose: a restart clears it,
+// which is exactly what you want once the mailbox has been fixed.
+const sendFailures = new Map();
+
+function sendFailureWait(address, now, windowMs) {
+  const list = (sendFailures.get(address) || []).filter((t) => t > now - windowMs);
+  if (list.length) sendFailures.set(address, list);
+  else sendFailures.delete(address);
+  if (list.length < config.codeMaxSendFailures) return 0;
+  return Math.ceil((list[0] + windowMs - now) / 1000);
+}
+
+function noteSendFailure(address, now, windowMs) {
+  const list = (sendFailures.get(address) || []).filter((t) => t > now - windowMs);
+  list.push(now);
+  sendFailures.set(address, list);
+  if (sendFailures.size > 500) sendFailures.clear();
 }
 
 export function consumeCode({ email, purpose, code }) {

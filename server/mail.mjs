@@ -4,6 +4,7 @@
 // dependencies, and all this actually needs is "connect, AUTH LOGIN, one
 // message, QUIT". Port 25 is blocked by the cloud provider, so the default is
 // implicit TLS on 465.
+import crypto from 'node:crypto';
 import net from 'node:net';
 import tls from 'node:tls';
 import { config } from './config.mjs';
@@ -24,9 +25,14 @@ function base64Lines(text) {
 
 function buildMessage({ to, subject, text }) {
   const from = config.mailFrom;
+  const domain = String(from).split('@')[1] || 'localhost';
   const headers = [
     `From: ${encodeHeaderWord(config.mailFromName)} <${from}>`,
     `To: <${to}>`,
+    `Reply-To: <${from}>`,
+    // Without a Message-ID QQ/163 score the mail as machine generated; some
+    // recipients then bin it without telling the sender anything.
+    `Message-ID: <${crypto.randomUUID()}@${domain}>`,
     `Subject: ${encodeHeaderWord(subject)}`,
     `Date: ${new Date().toUTCString().replace('GMT', '+0000')}`,
     'MIME-Version: 1.0',
@@ -260,5 +266,24 @@ export async function sendCode({ to, code, purpose, name }) {
     );
     throw mailError();
   }
+  // "Accepted by the SMTP server" is all we can know; log it so a "I never got
+  // it" report can be told apart from "we never sent it".
+  console.log(
+    `[mail] sent purpose=${purpose} to=${String(to).split('@')[1] || '?'} id=${crypto.randomUUID().slice(0, 8)}`
+  );
   return { dev: false };
+}
+
+// Used by `cli mail-test <address>` to check the outbound path without creating
+// an account or a code.
+export async function sendTestMail(to) {
+  const text = [
+    '这是一封测试邮件，说明「我们的小站」的发信通道是通的。',
+    '',
+    '收到它之后，注册、找回密码、换绑邮箱、改密码的验证码都会走同一条路。',
+    '',
+    '—— 我们的小站',
+  ].join('\n');
+  await sendMail({ to, subject: '【我们的小站】发信测试', text });
+  console.log(`[mail] test sent to=${String(to).split('@')[1] || '?'}`);
 }
