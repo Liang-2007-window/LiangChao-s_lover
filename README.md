@@ -127,6 +127,33 @@ pwsh -File deploy\pull-backup.ps1        # 手动拉一次
 - 拉下来的 `ld-key.env` 是能解开全部日记的密钥，**不要**放进 git 仓库或共享网盘目录；
   想更保险可以用加密压缩包再扔网盘（7z/zip 带密码）。
 
+### 导出明文日记（把日记还给作者 / 服务器不在了）
+
+有两个入口，都**只读**，不会动线上数据：
+
+```bash
+# 服务器还在：单个账号，导出到服务器目录（0600）
+runuser -u www-data -- env LD_ENV_FILE=/etc/liangchao.env \
+  /usr/local/bin/node /srv/liangchao/app/server/cli.mjs export-diary <账号> /var/backups/liangchao/export
+
+# 服务器还在：全部账号各一份
+runuser -u www-data -- env LD_ENV_FILE=/etc/liangchao.env \
+  /usr/local/bin/node /srv/liangchao/app/server/cli.mjs export-all /var/backups/liangchao/export
+```
+
+```powershell
+# 服务器已经没了：用本机备份离线导，不需要连服务器
+pwsh -File deploy\export-from-backup.ps1
+pwsh -File deploy\export-from-backup.ps1 -Db D:\liangchao-backup\2026-10-29\liangchao.db `
+  -KeyEnv D:\liangchao-backup\2026-10-29\ld-key.env -Out D:\liangchao-export
+```
+
+每个账号得到两个文件：`<账号>-<时间>.json`（原样全字段，便于再导入或写进别的程序）和
+`<账号>-<时间>.md`（按日期排好、能直接发给人看）。两条路径都要求 `LD_DATA_KEY`
+能对上——**密钥丢了就只剩密文**，db 和 key 必须一起备份、一起保存。
+
+导出物是**明文**：给人之后就不是秘密了，导完记得清理中间文件。
+
 ## 域名与 HTTPS
 
 站点地址是 **https://selfweb.eu.cc**（`www` 同）。用 `https://` 打开，别用 `http://`——

@@ -17,7 +17,7 @@ import path from 'node:path';
 import { config } from './config.mjs';
 import db, { stmt } from './db.mjs';
 import { hashPassword, purgeSessions } from './security.mjs';
-import { sealEntry } from './entry.mjs';
+import { openEntry, sealEntry } from './entry.mjs';
 import { pruneCodes } from './codes.mjs';
 
 const [, , command, ...args] = process.argv;
@@ -195,6 +195,66 @@ function removePlaza(id) {
   console.log(`deleted plaza post ${id}`);
 }
 
+// Handing a diary back to its owner (a dead server, a lost password, a closing
+// site) needs the plaintext. This is the only command that decrypts bodies, so
+// it says out loud what it is doing and writes files 0600.
+function stamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+}
+
+function safeName(name) {
+  return String(name).replace(/[^\w\u4e00-\u9fa5.-]+/g, '_').slice(0, 40);
+}
+
+function renderMarkdown(account, entries) {
+  const head = `# ${account.name} 的日记\n\n导出时间：${new Date().toLocaleString('zh-CN')}\n共 ${entries.length} 篇\n\n---\n\n`;
+  const body = entries
+    .map((e) => {
+      const meta = [e.weather && `天气：${e.weather}`, e.mood && `心情：${e.mood}`].filter(Boolean).join('　');
+      return [
+        `## ${e.date}${e.title ? '　' + e.title : ''}`,
+        meta ? `\n*${meta}*\n` : '',
+        `\n${e.body}\n`,
+      ].join('');
+    })
+    .join('\n---\n\n');
+  return head + body;
+}
+
+function exportAccount(account, outDir, quiet) {
+  const rows = stmt.diaryByAccountAsc.all(account.id);
+  const entries = rows.map(openEntry);
+  fs.mkdirSync(outDir, { recursive: true });
+  const base = path.join(outDir, `${safeName(account.name)}-${stamp()}`);
+  const json = {
+    account: account.name,
+    email: account.email || null,
+    exportedAt: new Date().toISOString(),
+    count: entries.length,
+    entries,
+  };
+  fs.writeFileSync(`${base}.json`, JSON.stringify(json, null, 2), { mode: 0o600 });
+  fs.writeFileSync(`${base}.md`, renderMarkdown(account, entries), { mode: 0o600 });
+  if (!quiet) console.log(`exported ${entries.length} entries for ${account.name}: ${base}.json / .md`);
+  return { entries: entries.length, base };
+}
+
+function exportDiary(name, outDir) {
+  if (!name) die('usage: export-diary <account> [outdir]');
+  exportAccount(accountOrDie(name), outDir || process.cwd(), false);
+}
+
+function exportAll(outDir) {
+  const dir = outDir || process.cwd();
+  let total = 0;
+  for (const account of stmt.accountAll.all()) {
+    const full = stmt.accountById.get(account.id);
+    const { entries } = exportAccount(full, dir, true);
+    total += entries;
+  }
+  console.log(`exported ${total} entries across ${stmt.accountAll.all().length} accounts into ${path.resolve(dir)}`);
+}
+
 async function mailTest(address) {
   if (!address || !address.includes('@')) die('usage: mail-test <address>');
   const { sendTestMail } = await import('./mail.mjs');
@@ -231,6 +291,12 @@ switch (command) {
   case 'mail-test':
     await mailTest(args[0]);
     break;
+  case 'export-diary':
+    exportDiary(args[0], args[1]);
+    break;
+  case 'export-all':
+    exportAll(args[0]);
+    break;
   case 'list':
     listAccounts();
     break;
@@ -242,7 +308,7 @@ switch (command) {
     break;
   default:
     console.log(
-      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune | plaza-list | plaza-rm | mail-test'
+      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune | plaza-list | plaza-rm | mail-test | export-diary | export-all'
     );
     process.exit(command ? 1 : 0);
 }
