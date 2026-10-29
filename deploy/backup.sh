@@ -21,7 +21,10 @@ chmod 700 "$OUT"
 sqlite3 "$DB" ".backup '$OUT/liangchao-$STAMP.db'"
 
 # 2) 主密钥与配置（丢了密钥 = 日记永久不可读，必须单独备）
-cp -a "$DATA_DIR/master.key" "$OUT/master-$STAMP.key"
+#    线上密钥在 /etc/liangchao.env 的 LD_DATA_KEY；若改用了 master.key 文件也一并备
+if [ -f "$DATA_DIR/master.key" ]; then
+  cp -a "$DATA_DIR/master.key" "$OUT/master-$STAMP.key"
+fi
 cp -a /etc/liangchao.env     "$OUT/env-$STAMP.txt" 2>/dev/null || true
 
 chmod 600 "$OUT"/*
