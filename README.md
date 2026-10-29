@@ -42,6 +42,22 @@ ssh root@47.111.150.169 'bash /srv/liangchao/app/deploy/install-server.sh'   # �
 - 每天 03:20 `/usr/local/bin/liangchao-backup.sh` 备份数据库和密钥，留 7 天。
   **密钥丢了日记就永久打不开**，备份要一起带走。
 
+### 本机异地备份
+
+服务器上那份备份和服务器同生共死，所以再拉一份到自己的电脑：
+
+```powershell
+pwsh -File deploy\pull-backup.ps1        # 手动拉一次
+```
+
+- 落在 `D:\liangchao-backup\yyyy-MM-dd\`（`liangchao.db` + `ld-key.env`），另有 `latest\` 一份最新的。
+- 拉完会自己校验：db 文件头是 `SQLite format 3`、密钥里有 64 位 `LD_DATA_KEY`。
+- 本机保留 30 天，日志在 `D:\liangchao-backup\pull.log`。
+- 已注册 Windows 任务计划 `Liangchao-Diary-Backup`，每天 09:00 跑一次；错过时间（电脑没开）
+  会在下次开机后补跑。删掉用：`Unregister-ScheduledTask -TaskName Liangchao-Diary-Backup`
+- 拉下来的 `ld-key.env` 是能解开全部日记的密钥，**不要**放进 git 仓库或共享网盘目录；
+  想更保险可以用加密压缩包再扔网盘（7z/zip 带密码）。
+
 ## 域名与 HTTPS
 
 站点地址是 **https://selfweb.eu.cc**（`www` 同）。用 `https://` 打开，别用 `http://`——
