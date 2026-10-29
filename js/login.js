@@ -161,6 +161,14 @@
         return;
       }
       setBusy(false);
+      if (result.reason === 'unverified') {
+        // 账号存在但邮箱没验证：把账号带过去，让他直接收一封新的验证码。
+        say('这个账号还没验证邮箱，带你去验证…', 'ok');
+        window.setTimeout(function () {
+          window.location.href = 'register.html?account=' + encodeURIComponent(result.account || u);
+        }, reduceMotion ? 250 : 900);
+        return;
+      }
       if (result.reason === 'locked') {
         pass.value = '';
         shake();

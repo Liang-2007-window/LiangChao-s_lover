@@ -13,10 +13,11 @@
   var fileMode = /^file:/i.test(String((global.location && global.location.protocol) || ''));
   var supported = !fileMode && !!(global.fetch && global.Api);
 
-  var state = { user: null, checked: false };
+  var state = { user: null, account: null, checked: false };
 
-  function remember(name) {
+  function remember(name, account) {
     state.user = name || null;
+    state.account = account || null;
     state.checked = true;
     return state.user;
   }
@@ -25,7 +26,11 @@
   function me() {
     if (!supported) return Promise.resolve(null);
     return global.Api.get('/api/auth/me').then(function (d) {
-      return remember(d && d.user ? d.user.name : null);
+      if (d && d.user) {
+        remember(d.user.name, d.user);
+        return state.user;
+      }
+      return remember(null);
     }, function () {
       return remember(null);
     });
@@ -34,16 +39,20 @@
   /**
    * 登录。总是 resolve，不抛异常：
    *   { ok: true }
-   *   { ok: false, reason: 'bad' | 'locked' | 'unsupported' | 'net' | 'error', retryAfter }
+   *   { ok: false, reason: 'bad' | 'unverified' | 'locked' | 'unsupported' | 'net' | 'error', retryAfter }
    */
   function login(user, password) {
     if (!supported) return Promise.resolve({ ok: false, reason: 'unsupported' });
     return global.Api.post('/api/auth/login', { account: user, password: password }).then(function (d) {
-      remember(d && d.user ? d.user.name : null);
-      return { ok: true, count: d && d.diaryCount };
+      remember(d && d.user ? d.user.name : null, d && d.user);
+      return { ok: true, count: d && d.diaryCount, account: d && d.user };
     }, function (err) {
       if (!err || !err.status) return { ok: false, reason: 'net' };
-      if (err.status === 401) return { ok: false, reason: 'bad' };
+      if (err.status === 401) {
+        return err.error === 'unverified'
+          ? { ok: false, reason: 'unverified', account: user }
+          : { ok: false, reason: 'bad' };
+      }
       if (err.status === 429) return { ok: false, reason: 'locked', retryAfter: err.retryAfter || 0 };
       return { ok: false, reason: 'error' };
     });
@@ -57,6 +66,49 @@
 
   function isLoggedIn() { return !!state.user; }
   function currentUser() { return state.user; }
+  function currentAccount() { return state.account; }
+
+  // ---------- 账号（注册 / 找回 / 设置） ----------
+  // 这三个页面的错误都交给服务端判断，前端只把错误码翻译成中文，
+  // 这样「账号是否存在」不会从客户端逻辑里泄露出去。
+
+  function register(account, password, email) {
+    return global.Api.post('/api/auth/register', {
+      account: account, password: password, email: email
+    }).then(function (d) { return d || {}; });
+  }
+
+  function verifyEmail(account, code) {
+    return global.Api.post('/api/auth/verify-email', { account: account, code: code })
+      .then(function (d) {
+        if (d && d.user) remember(d.user.name, d.user);
+        return d || {};
+      });
+  }
+
+  function requestCode(purpose, account) {
+    var body = { purpose: purpose };
+    if (account) body.account = account;
+    return global.Api.post('/api/auth/code', body).then(function (d) { return d || {}; });
+  }
+
+  function resetPassword(account, code, password) {
+    return global.Api.post('/api/auth/reset', {
+      account: account, code: code, password: password
+    }).then(function (d) { return d || {}; });
+  }
+
+  function changeEmail(email, code) {
+    return global.Api.put('/api/account/email', { email: email, code: code }).then(function (d) {
+      if (d && d.user) remember(d.user.name, d.user);
+      return d || {};
+    });
+  }
+
+  function changePassword(password, code) {
+    return global.Api.put('/api/account/password', { password: password, code: code })
+      .then(function (d) { return d || {}; });
+  }
 
   // ---------- 日记 ----------
   function loadDiary(order) {
@@ -101,6 +153,13 @@
     logout: logout,
     isLoggedIn: isLoggedIn,
     currentUser: currentUser,
+    currentAccount: currentAccount,
+    register: register,
+    verifyEmail: verifyEmail,
+    requestCode: requestCode,
+    resetPassword: resetPassword,
+    changeEmail: changeEmail,
+    changePassword: changePassword,
     loadDiary: loadDiary,
     createDiary: createDiary,
     updateDiary: updateDiary,
