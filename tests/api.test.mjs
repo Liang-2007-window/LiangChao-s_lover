@@ -14,6 +14,7 @@ let base = '';
 let server;
 let db;
 let stmt;
+let devOutbox = [];
 
 async function call(method, url, { body, headers = {}, cookies = true } = {}) {
   const h = { ...headers };
@@ -50,15 +51,33 @@ before(async () => {
   process.env.LD_QUIZ_ANSWER = '刘克';
   process.env.LD_LOG = '0';
   process.env.LD_HOST = '127.0.0.1';
+  // No real mailbox here: codes go to the in-memory dev outbox.
+  process.env.LD_DEV_MAIL = '1';
+  process.env.LD_CODE_COOLDOWN = '0';
+  process.env.LD_CODE_HOURLY = '100';
+  process.env.LD_CODE_IP_HOURLY = '100';
+  process.env.LD_REG_HOURLY = '100';
+  process.env.LD_LOGIN_MAX = '1000';
+  process.env.LD_QUIZ_PER_MINUTE = '1000';
 
   ({ server } = await import('../server/index.mjs'));
   ({ default: db, stmt } = await import('../server/db.mjs'));
   const { hashPassword } = await import('../server/security.mjs');
+  ({ devOutbox } = await import('../server/mail.mjs'));
 
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
   stmt.accountInsert.run('liuke', await hashPassword('20050721'), Date.now());
 });
+
+// Latest dev-mode code for an address + purpose (null when none was sent).
+function lastCode(email, purpose) {
+  for (let i = devOutbox.length - 1; i >= 0; i -= 1) {
+    const item = devOutbox[i];
+    if (item.to === email && item.purpose === purpose) return item.code;
+  }
+  return null;
+}
 
 after(() => {
   server?.close();
@@ -182,4 +201,228 @@ test('logout clears the session', async () => {
   assert.equal(me.json.user, null);
   const list = await call('GET', '/api/diary');
   assert.equal(list.status, 401);
+});
+
+/* ------------------------------------------------------- signup and account */
+
+test('registration validates name, password strength and email shape', async () => {
+  const noDigit = await call('POST', '/api/auth/register', {
+    body: { account: 'weak1', password: 'abcdefgh', email: 'weak1@example.com' },
+  });
+  assert.equal(noDigit.status, 400);
+  assert.equal(noDigit.json.error, 'weak_password');
+
+  const noLetter = await call('POST', '/api/auth/register', {
+    body: { account: 'weak2', password: '12345678', email: 'weak2@example.com' },
+  });
+  assert.equal(noLetter.status, 400);
+  assert.equal(noLetter.json.error, 'weak_password');
+
+  const tooShort = await call('POST', '/api/auth/register', {
+    body: { account: 'weak3', password: 'a1', email: 'weak3@example.com' },
+  });
+  assert.equal(tooShort.status, 400);
+
+  const badEmail = await call('POST', '/api/auth/register', {
+    body: { account: 'weak4', password: 'abcd1234', email: 'not-an-email' },
+  });
+  assert.equal(badEmail.status, 400);
+  assert.equal(badEmail.json.error, 'bad_email');
+
+  const badName = await call('POST', '/api/auth/register', {
+    body: { account: 'a', password: 'abcd1234', email: 'ok@example.com' },
+  });
+  assert.equal(badName.status, 400);
+  assert.equal(badName.json.error, 'bad_account');
+});
+
+test('signup is pending until the emailed code comes back', async () => {
+  const res = await call('POST', '/api/auth/register', {
+    body: { account: 'Newbie', password: 'abcd1234', email: 'Newbie@Example.com' },
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.json.pending, true);
+  assert.equal(res.json.email, 'newbie@example.com', 'email is lower-cased');
+
+  // The address is stored, never echoed back to an anonymous caller via login.
+  const early = await call('POST', '/api/auth/login', {
+    body: { account: 'newbie', password: 'abcd1234' },
+  });
+  assert.equal(early.status, 401);
+  assert.equal(early.json.error, 'unverified');
+
+  // A fresh account of the same name cannot be created while it is pending.
+  const again = await call('POST', '/api/auth/register', {
+    body: { account: 'newbie', password: 'abcd1234', email: 'other@example.com' },
+  });
+  assert.equal(again.status, 409);
+  assert.equal(again.json.error, 'name_taken');
+
+  const code = lastCode('newbie@example.com', 'register');
+  assert.match(code, /^\d{6}$/);
+
+  const wrong = await call('POST', '/api/auth/verify-email', {
+    body: { account: 'newbie', code: '000000' === code ? '111111' : '000000' },
+  });
+  assert.equal(wrong.status, 400);
+  assert.equal(wrong.json.error, 'bad_code');
+
+  const ok = await call('POST', '/api/auth/verify-email', {
+    body: { account: 'newbie', code },
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.user.name, 'Newbie');
+  assert.equal(ok.json.user.verified, true);
+  assert.equal(ok.json.user.email, 'newbie@example.com');
+  assert.ok(jar.get('ld_sid'), 'verifying signs you in');
+
+  const me = await call('GET', '/api/auth/me');
+  assert.equal(me.json.user.verified, true);
+  assert.equal(me.json.user.email, 'newbie@example.com');
+
+  const reused = await call('POST', '/api/auth/verify-email', {
+    body: { account: 'newbie', code },
+  });
+  assert.equal(reused.status, 409);
+  assert.equal(reused.json.error, 'already_verified');
+
+  const login = await call('POST', '/api/auth/login', {
+    body: { account: 'newbie', password: 'abcd1234' },
+  });
+  assert.equal(login.status, 200);
+});
+
+test('a new account starts with an empty diary of its own', async () => {
+  const list = await call('GET', '/api/diary');
+  assert.equal(list.status, 200);
+  assert.equal(list.json.items.length, 0);
+});
+
+test('reset asks for a code and reports unknown accounts like known ones', async () => {
+  const unknown = await call('POST', '/api/auth/code', {
+    body: { purpose: 'reset', account: 'nobody-here' },
+  });
+  assert.equal(unknown.status, 200);
+  assert.equal(unknown.json.sent, true, 'unknown account must not be enumerable');
+
+  const known = await call('POST', '/api/auth/code', {
+    body: { purpose: 'reset', account: 'newbie' },
+  });
+  assert.equal(known.status, 200);
+  assert.equal(known.json.sent, true);
+  assert.ok(lastCode('newbie@example.com', 'reset'));
+});
+
+test('reset changes the password and kills existing sessions', async () => {
+  const code = lastCode('newbie@example.com', 'reset');
+
+  const weak = await call('POST', '/api/auth/reset', {
+    body: { account: 'newbie', code, password: 'short' },
+  });
+  assert.equal(weak.status, 400);
+  assert.equal(weak.json.error, 'weak_password');
+
+  const wrong = await call('POST', '/api/auth/reset', {
+    body: { account: 'newbie', code: code === '000000' ? '111111' : '000000', password: 'abcd9999' },
+  });
+  assert.equal(wrong.status, 400);
+
+  // still logged in from the verification step, until the reset happens
+  const before = await call('GET', '/api/auth/me');
+  assert.ok(before.json.user);
+
+  const ok = await call('POST', '/api/auth/reset', {
+    body: { account: 'newbie', code, password: 'abcd9999' },
+  });
+  assert.equal(ok.status, 200);
+
+  const me = await call('GET', '/api/auth/me');
+  assert.equal(me.json.user, null, 'old sessions are revoked');
+  jar.clear();
+
+  const oldPass = await call('POST', '/api/auth/login', {
+    body: { account: 'newbie', password: 'abcd1234' },
+  });
+  assert.equal(oldPass.status, 401);
+
+  const newPass = await call('POST', '/api/auth/login', {
+    body: { account: 'newbie', password: 'abcd9999' },
+  });
+  assert.equal(newPass.status, 200);
+});
+
+test('changing email requires the code sent to the current address', async () => {
+  // Give another account an address so the uniqueness check has something to hit.
+  const { stmt } = await import('../server/db.mjs');
+  const liuke = stmt.accountByName.get('liuke');
+  stmt.accountSetEmailVerified.run('taken@example.com', Date.now(), liuke.id);
+
+  const sent = await call('POST', '/api/auth/code', { body: { purpose: 'change-email' } });
+  assert.equal(sent.status, 200);
+  const code = lastCode('newbie@example.com', 'change-email');
+  assert.ok(code);
+
+  const taken = await call('PUT', '/api/account/email', {
+    body: { email: 'taken@example.com', code },
+  });
+  assert.equal(taken.status, 409);
+  assert.equal(taken.json.error, 'email_taken');
+
+  const ok = await call('PUT', '/api/account/email', {
+    body: { email: 'newbie2@example.com', code },
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.user.email, 'newbie2@example.com');
+});
+
+test('changing the password needs both the code and the strength rule', async () => {
+  await call('POST', '/api/auth/code', { body: { purpose: 'change-password' } });
+  const code = lastCode('newbie2@example.com', 'change-password');
+  assert.ok(code, 'code goes to the current address');
+
+  const weak = await call('PUT', '/api/account/password', {
+    body: { password: 'abcdefgh', code: 'wrong!' },
+  });
+  assert.equal(weak.status, 400);
+
+  const ok = await call('PUT', '/api/account/password', {
+    body: { password: 'zzzz1234', code },
+  });
+  assert.equal(ok.status, 200);
+  assert.ok(jar.get('ld_sid'), 'the current device stays signed in');
+
+  const me = await call('GET', '/api/auth/me');
+  assert.equal(me.json.user.name, 'Newbie');
+
+  await call('POST', '/api/auth/logout');
+  const login = await call('POST', '/api/auth/login', {
+    body: { account: 'newbie', password: 'zzzz1234' },
+  });
+  assert.equal(login.status, 200);
+});
+
+test('an account cannot store more entries than its quota', async () => {
+  const { hashPassword } = await import('../server/security.mjs');
+  const { stmt } = await import('../server/db.mjs');
+  const { sealEntry } = await import('../server/entry.mjs');
+  const { config } = await import('../server/config.mjs');
+
+  stmt.accountInsert.run('bulk', await hashPassword('bulk1234'), Date.now());
+  const bulk = stmt.accountByName.get('bulk');
+  const sealed = sealEntry({ date: '2026-01-01', title: 't', body: 'b' });
+  for (let i = 0; i < config.maxEntriesPerAccount; i += 1) {
+    stmt.diaryInsert.run(bulk.id, sealed.date, sealed.ct, sealed.iv, sealed.tag, Date.now(), Date.now());
+  }
+
+  await call('POST', '/api/auth/logout');
+  const login = await call('POST', '/api/auth/login', {
+    body: { account: 'bulk', password: 'bulk1234' },
+  });
+  assert.equal(login.status, 200);
+
+  const over = await call('POST', '/api/diary', {
+    body: { date: '2026-01-02', title: 'x', body: 'y' },
+  });
+  assert.equal(over.status, 409);
+  assert.equal(over.json.error, 'quota_exceeded');
 });

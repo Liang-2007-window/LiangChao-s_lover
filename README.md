@@ -2,19 +2,24 @@
 
 一个两层的小站：第一层是夏天的海和一道只有一个人答得对的问题，第二层是黄昏和两个人的日记本。
 现在是动态站——日记存在服务器 SQLite 里，密码在服务端校验，正文整体 AES-256-GCM 加密后落库。
+账号可以自己注册（邮箱验证码验证），彼此看不到对方的日记。
 
 ## 目录
 
 ```
-index.html / diary.html      两页入口
+index.html / diary.html      两个主页面
+register.html / forgot.html / settings.html   注册、找回密码、账号设置
 css/ js/ images/ audio/ fonts/   静态资源（Nginx 直接发）
 server/                      后端：node:http + node:sqlite，零 npm 依赖
   index.mjs                  路由、会话、限流、请求日志
   db.mjs                     建表与预编译语句
   security.mjs               scrypt 口令、AES-GCM、会话 token、锁定
   entry.mjs                  日记载荷加解密（整条加密）
+  mail.mjs                   发信：自己写的 SMTP 客户端（无 nodemailer）
+  codes.mjs                  邮箱验证码：签发、冷却、次数上限、校验
   config.mjs / http.mjs / static.mjs / cli.mjs
-tests/api.test.mjs           同进程端到端测试（10 项）
+tests/api.test.mjs           同进程端到端测试（18 项）
+tests/mail.test.mjs          SMTP 客户端测试，跑在进程内的假邮件服务器上（6 项）
 deploy/                      nginx 配置、systemd 单元、安装/备份/发布脚本
 docs/dynamic-plan.md         设计说明：架构、加密、容量预算、阶段计划
 ```
@@ -24,10 +29,38 @@ docs/dynamic-plan.md         设计说明：架构、加密、容量预算、阶
 ```powershell
 # server/.env 里放 LD_DATA_KEY / LD_DATA_DIR / LD_SERVE_STATIC=1
 node server/index.mjs          # http://127.0.0.1:3000 同时发静态和 API
-node tests/api.test.mjs        # 10 项接口测试
-node server/cli.mjs list       # 账号、篇数
-node server/cli.mjs add-account <账号> <密码>
+node tests/api.test.mjs        # 18 项接口测试
+node tests/mail.test.mjs       # 6 项 SMTP 测试
+node server/cli.mjs list       # 账号、邮箱、篇数
+node server/cli.mjs add-account <账号> <密码> [邮箱]
 ```
+
+本地不想配邮箱时，启动前设 `LD_DEV_MAIL=1`：验证码不发送，直接打在服务器日志里（`[mail:dev] ... code=123456`），
+注册页照常用。
+
+## 账号体系
+
+- **注册**：账号 + 邮箱 + 密码 → 服务端校验并建「待验证」账号 → 发 6 位验证码（10 分钟有效）
+  → 填对验证码才真正可用，并直接登录。没验证的账号登不进来，24 小时后由 `cli.mjs prune` 清掉。
+- **密码规则**：8–64 位，必须同时含字母和数字。校验在服务端（`server/index.mjs` 的 `checkPassword`）。
+- **每个账号的日记彼此隔离**：所有查询都带 `account_id`，换账号只看得到自己的。
+- **忘记密码**：账号 + 邮件验证码 + 新密码。重置会同时清掉这个账号的全部会话（别处已登录的设备全部掉线）。
+- **账号设置**（`settings.html`）：换绑邮箱、改密码，两者都要往**当前**邮箱发验证码确认；
+  改密码后只保留当前设备的登录。
+- **防枚举**：找回密码时账号不存在也返回「已发送」；验证码只存 `sha256(email|purpose|code)`。
+- **限制**：同一邮箱每个用途 60 秒冷却、每小时 5 封；同一 IP 每小时 10 封验证码、3 次注册；
+  验证码最多试 5 次；单账号最多 500 篇 / 5 MB 密文。
+
+### 配置发验证码的邮箱（QQ 邮箱）
+
+QQ 邮箱「设置 → 账户 → 开启 SMTP 服务 → 生成授权码」（**不是**登录密码），然后在服务器上：
+
+```bash
+sudo bash /srv/liangchao/app/deploy/smtp-setup.sh 1373917993@qq.com <授权码>
+```
+
+脚本会改写 `/etc/liangchao.env` 里的 `LD_SMTP_*` 并重启服务。没配置时注册接口返回 503
+`mail_unavailable`，已有账号的登录不受影响。
 
 ## 部署（2 核 2G）
 
@@ -80,7 +113,13 @@ pwsh -File deploy\pull-backup.ps1        # 手动拉一次
 | GET | `/api/health` | 存活、RSS、Node 版本 |
 | POST | `/api/auth/login` | `{account,password}` → 种 `ld_sid` Cookie（HTTPS 下带 `Secure`） |
 | POST | `/api/auth/logout` | 清会话 |
-| GET | `/api/auth/me` | 当前用户 |
+| GET | `/api/auth/me` | 当前用户 + 已写篇数 |
+| POST | `/api/auth/register` | `{account,password,email}` → 建待验证账号并发码 |
+| POST | `/api/auth/verify-email` | `{account,code}` → 激活并登录 |
+| POST | `/api/auth/code` | `{purpose,account?}`，purpose=`register\|reset\|change-email\|change-password` |
+| POST | `/api/auth/reset` | `{account,code,password}` → 重置密码并清掉全部会话 |
+| PUT | `/api/account/email` | `{email,code}` → 换绑邮箱（码发到旧邮箱） |
+| PUT | `/api/account/password` | `{password,code}` → 改密码，其它设备掉线 |
 | GET | `/api/diary?order=new\|old` | 列表（解密后返回） |
 | POST | `/api/diary` | 新建 |
 | PUT / DELETE | `/api/diary/:id` | 修改 / 删除 |

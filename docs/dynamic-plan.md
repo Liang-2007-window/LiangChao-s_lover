@@ -217,3 +217,66 @@ login_fails(lkey PRIMARY KEY, n, last, until)                 -- 服务端锁定
 `document.cookie` 为空（会话 Cookie 是 HttpOnly）。
 
 遗留：`http://selfweb.eu.cc` 仍然会看到阿里云的 ICP 403 页面，这不是配置问题，只能靠备案或让用户始终用 `https://`。
+---
+
+## 12. 放开注册：邮箱验证码 + 账号设置（v3）
+
+### 为什么不是手机号
+
+国内短信必须用服务商的「签名 + 模板」，个人签名通常要求**已备案的网站/公众号/小程序/APP**。
+`selfweb.eu.cc` 没有备案（见第 11 节：阿里云把 80 端口按 Host 拦了），签名大概率批不下来；
+退一步说，短信按条计费、接口公开，被脚本刷一轮就是真金白银。所以验证渠道改成**邮箱验证码**：
+`server/mail.mjs` 是自己写的 SMTP 客户端（AUTH LOGIN + 隐式 TLS），没有引 nodemailer——
+2 核 2G 上每多一个 npm 包都是磁盘、内存和攻击面。
+
+### 数据模型
+
+`accounts` 加三列（`db.mjs` 里用 `PRAGMA table_info` 判断后 `ALTER TABLE`，可重复执行）：
+
+| 列 | 作用 |
+|---|---|
+| `email` | 绑定邮箱，部分唯一索引 `WHERE email IS NOT NULL`（老账号可以为 NULL） |
+| `verified` | 1=可用；0=注册了但没验证，登录返回 401 `unverified` |
+| `updated_at` | 最近一次改密码/改邮箱的时间 |
+
+新增 `email_codes(id, account_id, email, purpose, code_hash, exp, attempts, used, created_at)`：
+只存 `sha256(email|purpose|code)`，不存明文码。`purpose` 四类：`register / reset / change-email / change-password`。
+
+### 会话与权限的取舍
+
+- 注册成功**不发**会话，验证码填对才发 —— 否则「注册了但邮箱不是自己的」也能进门。
+- 重置密码 = 把这个账号的所有会话删掉，再让用户重新登录；改密码 = 删掉所有会话，但给当前设备发一个新 token。
+  两处都是 `stmt.sessionDeleteByAccount`，理由一样：密码变了，旧 Cookie 就不该再有效。
+- 换绑邮箱/改密码的验证码发到**当前**邮箱，不是新邮箱：偷到登录态的人改不走账号。
+- 防枚举：`/api/auth/code` 对不存在的账号也返回 `{sent:true, retryAfter:60}`；
+  验证码校验失败只说「码不对」，不区分「没这个账号」。
+- 密码规则：8–64 位且必须同时含字母和数字（用户要求）。scrypt 参数沿用 `N=16384, r=8, p=1`。
+
+### 限流（都存服务端，清 localStorage 绕不过）
+
+| 位置 | 上限 |
+|---|---|
+| 同一邮箱 + 同一用途 | 60 秒冷却；每小时 5 封 |
+| 同一 IP | 每小时 10 封验证码、3 次注册、10 次重置 |
+| 同一验证码 | 最多试 5 次，过期 10 分钟 |
+| 单账号 | 500 篇、5 MB 密文（开放注册后磁盘要有个上限） |
+| 未验证账号 | 24 小时后由 `cli.mjs prune` 删除 |
+
+### 前端
+
+新增 `register.html` / `forgot.html` / `settings.html` + `css/auth.css` + `js/account.js`（错误码翻译、按钮倒计时）
+和三个页面脚本。登录页在密码框下面加了「注册 · 忘记密码」两个链接；日记页顶栏加了「账号设置」。
+登录返回 401 `unverified` 时，登录页把账号名带进 `register.html?account=...`，直接进第二步收新码。
+
+### 踩坑
+
+`forgot.html` 里提交按钮的 id 原本叫 `reset`，于是 `form.reset` 被这个按钮元素遮住了，
+`form.reset()` 抛 `TypeError` 把后面的 `setTimeout` 跳转也带走了（页面停在「正在重设…」）。
+改名 `do-reset` 并改用 `HTMLFormElement.prototype.reset.call(form)`。教训：表单里别用 `reset` / `submit` 当 id。
+
+### 遗留
+
+- 邮件走 QQ 的 SMTP，单封约 1 秒；没有队列，`mailMaxConcurrent=2` 只是信号量，发信慢会占着请求。
+  以现在的访问量够用，量大了要改成「先落库、后台补发」。
+- 邮箱发信失败时注册会回滚（删掉刚建的 pending 账号），但用户看到的是 503 `mail_unavailable`，
+  需要管理员修配置，没有自助重试入口（重试其实就是再点一次）。

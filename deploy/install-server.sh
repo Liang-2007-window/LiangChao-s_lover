@@ -34,6 +34,21 @@ EOF
 else
   echo "    已存在，跳过（不会覆盖你的密钥）"
 fi
+# 老版本的 env 里没有发信配置：补上占位值，不覆盖已有的。
+if ! grep -q '^LD_SMTP_HOST=' "$ENV_FILE"; then
+  cat >>"$ENV_FILE" <<EOF
+
+# ---------- 发验证码用的邮箱（deploy/smtp-setup.sh 会改写这几行） ----------
+LD_SMTP_HOST=smtp.qq.com
+LD_SMTP_PORT=465
+LD_SMTP_TLS=1
+LD_SMTP_USER=
+LD_SMTP_PASS=
+LD_MAIL_FROM=
+LD_MAIL_FROM_NAME=我们的小站
+EOF
+  echo "    已补上 SMTP 占位配置（还没填账号密码，注册会返回 mail_unavailable）"
+fi
 chown root:www-data "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
