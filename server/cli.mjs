@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Admin CLI. Runs on the server (or locally against a copy of the database).
 //
-//   node server/cli.mjs add-account <name> <password>
+//   node server/cli.mjs add-account <name> <password> [email]
 //   node server/cli.mjs set-password <name> <password>
+//   node server/cli.mjs set-email <name> <email>
 //   node server/cli.mjs import-json <name> <file.json>
 //   node server/cli.mjs import-blob <name> <file.enc.json> <password>
 //   node server/cli.mjs list
@@ -15,6 +16,7 @@ import { config } from './config.mjs';
 import db, { stmt } from './db.mjs';
 import { hashPassword, purgeSessions } from './security.mjs';
 import { sealEntry } from './entry.mjs';
+import { pruneCodes } from './codes.mjs';
 
 const [, , command, ...args] = process.argv;
 
@@ -44,25 +46,43 @@ function accountOrDie(name) {
   return row;
 }
 
-async function addAccount(name, password) {
-  if (!name || !password) die('usage: add-account <name> <password>');
+async function addAccount(name, password, email) {
+  if (!name || !password) die('usage: add-account <name> <password> [email]');
   if (stmt.accountByName.get(name)) die(`account already exists: ${name}`);
+  if (email && stmt.accountByEmail.get(email)) die(`email already used: ${email}`);
   const hash = await hashPassword(password);
-  const info = stmt.accountInsert.run(name, hash, Date.now());
-  console.log(`created account ${name} (id ${info.lastInsertRowid})`);
+  const now = Date.now();
+  const info = stmt.accountInsert.run(name, hash, now);
+  const id = Number(info.lastInsertRowid);
+  if (email) stmt.accountSetEmailVerified.run(email, now, id);
+  console.log(`created account ${name} (id ${id})${email ? ` email ${email} (verified)` : ''}`);
 }
 
 async function setPassword(name, password) {
   const account = accountOrDie(name);
   const hash = await hashPassword(password);
-  stmt.accountSetHash.run(hash, account.id);
+  stmt.accountSetHash.run(hash, Date.now(), account.id);
   console.log(`password updated for ${name}`);
+}
+
+// Bypass for the case where the address itself is lost: admin sets it directly.
+function setEmail(name, email) {
+  if (!name || !email) die('usage: set-email <name> <email>');
+  const account = accountOrDie(name);
+  const taken = stmt.accountByEmail.get(email);
+  if (taken && taken.id !== account.id) die(`email already used by ${taken.name}`);
+  stmt.accountSetEmailVerified.run(String(email).trim().toLowerCase(), Date.now(), account.id);
+  console.log(`email for ${name} set to ${email} (verified)`);
 }
 
 function listAccounts() {
   for (const a of stmt.accountAll.all()) {
     const n = stmt.diaryCount.get(a.id).n;
-    console.log(`${a.id}\t${a.name}\t${n} diaries\tcreated ${new Date(a.created_at).toISOString()}`);
+    const email = a.email || '-';
+    const verified = a.verified ? 'ok' : 'UNVERIFIED';
+    console.log(
+      `${a.id}\t${a.name}\t${email}\t${verified}\t${n} diaries\tcreated ${new Date(a.created_at).toISOString()}`
+    );
   }
 }
 
@@ -141,18 +161,29 @@ function backup(dir) {
 
 function prune() {
   purgeSessions();
+  pruneCodes();
+  // Signups that never confirmed their address only ever held a password hash.
+  let dropped = 0;
+  const cutoff = Date.now() - config.maxPendingHours * 3600_000;
+  for (const row of stmt.pendingAccounts.all(cutoff)) {
+    stmt.accountDelete.run(row.id);
+    dropped += 1;
+  }
   const before = fs.statSync(config.dbFile).size;
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   const after = fs.statSync(config.dbFile).size;
-  console.log(`sessions purged; db size ${before} -> ${after}`);
+  console.log(`sessions purged, ${dropped} unverified signups dropped; db size ${before} -> ${after}`);
 }
 
 switch (command) {
   case 'add-account':
-    await addAccount(args[0], args[1]);
+    await addAccount(args[0], args[1], args[2]);
     break;
   case 'set-password':
     await setPassword(args[0], args[1]);
+    break;
+  case 'set-email':
+    setEmail(args[0], args[1]);
     break;
   case 'import-json':
     importJson(args[0], args[1]);
@@ -171,7 +202,7 @@ switch (command) {
     break;
   default:
     console.log(
-      'commands: add-account | set-password | import-json | import-blob | list | backup | prune'
+      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune'
     );
     process.exit(command ? 1 : 0);
 }

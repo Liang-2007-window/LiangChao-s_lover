@@ -40,12 +40,46 @@ export const config = {
   serveStatic: process.env.LD_SERVE_STATIC === '1',
   quizAnswer: process.env.LD_QUIZ_ANSWER || '刘克',
   sessionDays: Number(process.env.LD_SESSION_DAYS || 14),
-  loginWindowSec: 60,
-  loginMaxPerWindow: 5,
+  loginWindowSec: Number(process.env.LD_LOGIN_WINDOW ?? 60),
+  loginMaxPerWindow: Number(process.env.LD_LOGIN_MAX ?? 5),
   lockBaseSec: 15,
   lockMaxSec: 900,
-  quizPerMinute: 6,
+  quizPerMinute: Number(process.env.LD_QUIZ_PER_MINUTE ?? 6),
   maxBodyBytes: 256 * 1024,
   maxDiaryBody: 100000,
   masterKeyHex: process.env.LD_DATA_KEY || '',
+
+  // ---------------------------------------------------------------- mail / codes
+  // Outbound mail goes through an ordinary SMTP mailbox (QQ mail by default).
+  // Port 25 is blocked by the cloud provider; 465 (implicit TLS) and 587 work.
+  smtpHost: process.env.LD_SMTP_HOST || 'smtp.qq.com',
+  smtpPort: Number(process.env.LD_SMTP_PORT || 465),
+  // 1 = implicit TLS on connect (465). 0 = plaintext, only for the fake SMTP
+  // server the tests spin up.
+  smtpTls: process.env.LD_SMTP_TLS !== '0',
+  smtpUser: process.env.LD_SMTP_USER || '',
+  smtpPass: process.env.LD_SMTP_PASS || '',
+  mailFrom: process.env.LD_MAIL_FROM || process.env.LD_SMTP_USER || '',
+  mailFromName: process.env.LD_MAIL_FROM_NAME || '我们的小站',
+  // With no SMTP account configured, print the code to stdout instead of
+  // failing - so local development never needs a real mailbox.
+  devMail: process.env.LD_DEV_MAIL === '1',
+
+  codeTtlSec: 600, // a code lives 10 minutes
+  codeCooldownSec: Number(process.env.LD_CODE_COOLDOWN ?? 60),
+  codeMaxPerEmailPerHour: Number(process.env.LD_CODE_HOURLY ?? 5),
+  codeMaxPerIpPerHour: Number(process.env.LD_CODE_IP_HOURLY ?? 10),
+  codeMaxAttempts: 5,
+  registerMaxPerIpPerHour: Number(process.env.LD_REG_HOURLY ?? 3),
+  mailTimeoutMs: 10_000,
+  mailMaxConcurrent: 2,
+
+  passwordMin: 8,
+  passwordMax: 64,
+
+  // Per-account caps: open signup means anyone can create rows, so the storage
+  // has to be bounded somewhere or a 40 GB disk is somebody else's quota.
+  maxEntriesPerAccount: 500,
+  maxAccountBytes: 5 * 1024 * 1024,
+  maxPendingHours: 24,
 };

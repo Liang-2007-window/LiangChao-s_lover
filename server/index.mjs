@@ -7,6 +7,7 @@ import {
   clearLoginFailures,
   createSession,
   dropSession,
+  hashPassword,
   hitRate,
   lockState,
   lookupSession,
@@ -14,6 +15,7 @@ import {
   purgeSessions,
   verifyPassword,
 } from './security.mjs';
+import { PURPOSES, consumeCode, issueCode, normalizeEmail } from './codes.mjs';
 import {
   clientIp,
   cookie,
@@ -34,6 +36,8 @@ const startedAt = Date.now();
 const DUMMY_HASH = `scrypt$16384$8$1$${Buffer.alloc(16).toString('base64')}$${Buffer.alloc(64).toString('base64')}`;
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const NAME_RE = /^[\w\u4e00-\u9fa5.-]{2,32}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function fail(status, error, extra = {}) {
   throw Object.assign(new Error(error), { status, payload: { error, ...extra } });
@@ -53,6 +57,35 @@ function validDate(value) {
   return value;
 }
 
+/* ------------------------------------------------- account field validation */
+
+function checkAccountName(value) {
+  const name = cleanText(value, 40, 'account');
+  if (!NAME_RE.test(name)) fail(400, 'bad_account');
+  return name;
+}
+
+// The rule the site promises on its own signup form: at least 8 characters and
+// both letters and digits, so "12345678" and "abcdefgh" are both refused.
+function checkPassword(value) {
+  const password = String(value ?? '');
+  if (password.length < config.passwordMin || password.length > config.passwordMax) {
+    fail(400, 'weak_password', { min: config.passwordMin });
+  }
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) fail(400, 'weak_password');
+  return password;
+}
+
+function checkEmail(value) {
+  const email = normalizeEmail(cleanText(value, 254, 'email'));
+  if (!EMAIL_RE.test(email)) fail(400, 'bad_email');
+  return email;
+}
+
+function publicUser(row) {
+  return { name: row.name, email: row.email || null, verified: !!row.verified };
+}
+
 function normalizeDiaryInput(input) {
   const date = validDate(String(input.date || '').trim());
   return {
@@ -66,6 +99,17 @@ function normalizeDiaryInput(input) {
 
 function rowToItem(row) {
   return openEntry(row);
+}
+
+// Open signup means strangers get rows on a 40 GB disk, so each account has a
+// hard cap on both entry count and total ciphertext bytes.
+function assertQuota(user) {
+  if (stmt.diaryCount.get(user.id).n >= config.maxEntriesPerAccount) {
+    fail(409, 'quota_exceeded', { limit: 'entries', max: config.maxEntriesPerAccount });
+  }
+  if (stmt.accountBytes.get(user.id).n >= config.maxAccountBytes) {
+    fail(409, 'quota_exceeded', { limit: 'bytes', max: config.maxAccountBytes });
+  }
 }
 
 function currentUser(req) {
@@ -122,10 +166,12 @@ async function login(req, res) {
   }
 
   clearLoginFailures(lkey);
+  // A signup whose emailed code never came back is not a usable account yet.
+  if (!account.verified) fail(401, 'unverified', { account: account.name, email: account.email });
   purgeSessions();
   const token = createSession(account.id);
   setSessionCookie(res, req, token);
-  sendJson(res, 200, { user: { name: account.name }, diaryCount: stmt.diaryCount.get(account.id).n });
+  sendJson(res, 200, { user: publicUser(account), diaryCount: stmt.diaryCount.get(account.id).n });
 }
 
 async function logout(req, res) {
@@ -140,7 +186,7 @@ async function me(req, res) {
   const { user } = currentUser(req);
   if (!user) return sendJson(res, 200, { user: null });
   sendJson(res, 200, {
-    user: { name: user.name },
+    user: publicUser(user),
     diaryCount: stmt.diaryCount.get(user.id).n,
   });
 }
@@ -160,6 +206,7 @@ async function createDiary(req, res) {
   guardWrite(req);
   const { user } = currentUser(req);
   if (!user) fail(401, 'unauthorized');
+  assertQuota(user);
   const input = normalizeDiaryInput(await readJson(req));
   const now = Date.now();
   const sealed = sealEntry(input);
@@ -217,6 +264,159 @@ async function quizAnswer(req, res) {
   sendJson(res, 200, { ok });
 }
 
+/* -------------------------------------------------- signup, reset, account */
+
+async function register(req, res) {
+  guardWrite(req);
+  const ip = clientIp(req);
+  const limit = hitRate(`register:${ip}`, config.registerMaxPerIpPerHour, 3600_000);
+  if (!limit.allowed) fail(429, 'too_many', { retryAfter: limit.retryAfter });
+
+  const body = await readJson(req);
+  const name = checkAccountName(body.account);
+  const password = checkPassword(body.password);
+  const email = checkEmail(body.email);
+
+  if (stmt.accountByName.get(name)) fail(409, 'name_taken');
+  if (stmt.accountByEmail.get(email)) fail(409, 'email_taken');
+
+  const hash = await hashPassword(password);
+  const now = Date.now();
+  let info;
+  try {
+    info = stmt.accountInsertPending.run(name, hash, email, now, now);
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) fail(409, 'name_taken');
+    throw err;
+  }
+  const accountId = Number(info.lastInsertRowid);
+
+  try {
+    const sent = await issueCode({ email, accountId, purpose: 'register', name, ip });
+    sendJson(res, 201, { pending: true, account: name, email, retryAfter: sent.retryAfter });
+  } catch (err) {
+    // A signup that never received a code is just debris - drop it so the same
+    // name can be tried again instead of being blocked forever.
+    stmt.accountDelete.run(accountId);
+    throw err;
+  }
+}
+
+async function verifyEmail(req, res) {
+  guardWrite(req);
+  const ip = clientIp(req);
+  const limit = hitRate(`verify:${ip}`, 20, 60_000);
+  if (!limit.allowed) fail(429, 'too_many', { retryAfter: limit.retryAfter });
+
+  const body = await readJson(req);
+  const account = stmt.accountByName.get(cleanText(body.account, 40, 'account'));
+  // Same generic answer whether the account is missing, already verified or the
+  // code is wrong: signup confirmation is not an enumeration oracle.
+  if (!account || !account.email) fail(400, 'bad_code');
+  if (account.verified) fail(409, 'already_verified');
+
+  consumeCode({ email: account.email, purpose: 'register', code: body.code });
+  stmt.accountSetVerified.run(Date.now(), account.id);
+  purgeSessions();
+  const token = createSession(account.id);
+  setSessionCookie(res, req, token);
+  sendJson(res, 200, { user: publicUser({ ...account, verified: 1 }), diaryCount: 0 });
+}
+
+async function requestCode(req, res) {
+  guardWrite(req);
+  const ip = clientIp(req);
+  const body = await readJson(req);
+  const purpose = String(body.purpose || '');
+  if (!PURPOSES.has(purpose)) fail(400, 'bad_purpose');
+
+  if (purpose === 'register' || purpose === 'reset') {
+    const account = stmt.accountByName.get(cleanText(body.account, 40, 'account'));
+    const usable = account && account.email && (purpose === 'register' ? !account.verified : true);
+    // Unknown account: answer exactly like a sent code, otherwise this endpoint
+    // tells anyone which names exist.
+    if (!usable) return sendJson(res, 200, { sent: true, retryAfter: config.codeCooldownSec });
+    const sent = await issueCode({
+      email: account.email,
+      accountId: account.id,
+      purpose,
+      name: account.name,
+      ip,
+    });
+    return sendJson(res, 200, { sent: true, retryAfter: sent.retryAfter });
+  }
+
+  const { user } = currentUser(req);
+  if (!user) fail(401, 'unauthorized');
+  if (!user.email) fail(400, 'no_email');
+  const sent = await issueCode({
+    email: user.email,
+    accountId: user.id,
+    purpose,
+    name: user.name,
+    ip,
+  });
+  sendJson(res, 200, { sent: true, retryAfter: sent.retryAfter });
+}
+
+async function resetPassword(req, res) {
+  guardWrite(req);
+  const ip = clientIp(req);
+  const limit = hitRate(`reset:${ip}`, 10, 3600_000);
+  if (!limit.allowed) fail(429, 'too_many', { retryAfter: limit.retryAfter });
+
+  const body = await readJson(req);
+  const account = stmt.accountByName.get(cleanText(body.account, 40, 'account'));
+  const password = checkPassword(body.password);
+  if (!account || !account.email) fail(400, 'bad_code');
+
+  consumeCode({ email: account.email, purpose: 'reset', code: body.code });
+  stmt.accountSetHash.run(await hashPassword(password), Date.now(), account.id);
+  // A password reset is also "log me out everywhere", otherwise an attacker who
+  // already holds a session keeps it after the victim recovers the account.
+  stmt.sessionDeleteByAccount.run(account.id);
+  sendJson(res, 200, { ok: true });
+}
+
+async function changeEmail(req, res) {
+  guardWrite(req);
+  const { user } = currentUser(req);
+  if (!user) fail(401, 'unauthorized');
+  if (!user.email) fail(400, 'no_email');
+
+  const body = await readJson(req);
+  const email = checkEmail(body.email);
+  const taken = stmt.accountByEmail.get(email);
+  if (taken && taken.id !== user.id) fail(409, 'email_taken');
+
+  consumeCode({ email: user.email, purpose: 'change-email', code: body.code });
+  try {
+    stmt.accountSetEmail.run(email, Date.now(), user.id);
+  } catch (err) {
+    if (String(err.message).includes('UNIQUE')) fail(409, 'email_taken');
+    throw err;
+  }
+  sendJson(res, 200, { user: publicUser({ ...user, email }) });
+}
+
+async function changePassword(req, res) {
+  guardWrite(req);
+  const { user } = currentUser(req);
+  if (!user) fail(401, 'unauthorized');
+  if (!user.email) fail(400, 'no_email');
+
+  const body = await readJson(req);
+  const password = checkPassword(body.password);
+  consumeCode({ email: user.email, purpose: 'change-password', code: body.code });
+
+  stmt.accountSetHash.run(await hashPassword(password), Date.now(), user.id);
+  // Every other device is signed out; this one gets a brand new token so the
+  // old cookie (if leaked) stops working too.
+  stmt.sessionDeleteByAccount.run(user.id);
+  setSessionCookie(res, req, createSession(user.id));
+  sendJson(res, 200, { ok: true });
+}
+
 async function health(req, res) {
   const mem = process.memoryUsage();
   sendJson(res, 200, {
@@ -238,6 +438,12 @@ async function route(req, res) {
   if (path === '/api/auth/login' && method === 'POST') return login(req, res);
   if (path === '/api/auth/logout' && method === 'POST') return logout(req, res);
   if (path === '/api/auth/me' && method === 'GET') return me(req, res);
+  if (path === '/api/auth/register' && method === 'POST') return register(req, res);
+  if (path === '/api/auth/verify-email' && method === 'POST') return verifyEmail(req, res);
+  if (path === '/api/auth/code' && method === 'POST') return requestCode(req, res);
+  if (path === '/api/auth/reset' && method === 'POST') return resetPassword(req, res);
+  if (path === '/api/account/email' && method === 'PUT') return changeEmail(req, res);
+  if (path === '/api/account/password' && method === 'PUT') return changePassword(req, res);
   if (path === '/api/diary' && method === 'GET') return listDiary(req, res, url);
   if (path === '/api/diary' && method === 'POST') return createDiary(req, res);
   if (path === '/api/quiz/answer' && method === 'POST') return quizAnswer(req, res);

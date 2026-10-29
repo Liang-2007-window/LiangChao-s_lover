@@ -60,14 +60,63 @@ db.exec(`
     k TEXT PRIMARY KEY,
     v TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS email_codes (
+    id         INTEGER PRIMARY KEY,
+    email      TEXT    NOT NULL,
+    account_id INTEGER,
+    purpose    TEXT    NOT NULL,
+    code_hash  TEXT    NOT NULL,
+    exp        INTEGER NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    used_at    INTEGER,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS email_codes_lookup ON email_codes(email, purpose, created_at DESC);
 `);
+
+// ALTER TABLE has no IF NOT EXISTS, so migrations are spelled out and skipped
+// once the column is already there - the database is the same file on a dev box
+// and on the server, and either may be older than the code.
+function hasColumn(table, column) {
+  return db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .some((row) => row.name === column);
+}
+
+if (!hasColumn('accounts', 'email')) db.exec('ALTER TABLE accounts ADD COLUMN email TEXT');
+if (!hasColumn('accounts', 'verified')) {
+  db.exec('ALTER TABLE accounts ADD COLUMN verified INTEGER NOT NULL DEFAULT 1');
+}
+if (!hasColumn('accounts', 'updated_at')) db.exec('ALTER TABLE accounts ADD COLUMN updated_at INTEGER');
+
+// NULL emails never collide, so the partial index lets the two legacy accounts
+// live without one until they bind an address.
+db.exec(
+  'CREATE UNIQUE INDEX IF NOT EXISTS accounts_email ON accounts(email COLLATE NOCASE) WHERE email IS NOT NULL'
+);
 
 export const stmt = {
   accountByName: db.prepare('SELECT * FROM accounts WHERE name = ?'),
   accountById: db.prepare('SELECT * FROM accounts WHERE id = ?'),
+  accountByEmail: db.prepare('SELECT * FROM accounts WHERE email = ? COLLATE NOCASE'),
   accountInsert: db.prepare('INSERT INTO accounts (name, pass_hash, created_at) VALUES (?, ?, ?)'),
-  accountSetHash: db.prepare('UPDATE accounts SET pass_hash = ? WHERE id = ?'),
-  accountAll: db.prepare('SELECT id, name, created_at FROM accounts ORDER BY id'),
+  // Open signup: the row exists but stays unverified until the emailed code
+  // comes back, so a typo'd address never turns into a working account.
+  accountInsertPending: db.prepare(
+    'INSERT INTO accounts (name, pass_hash, email, created_at, updated_at, verified) VALUES (?, ?, ?, ?, ?, 0)'
+  ),
+  accountSetHash: db.prepare('UPDATE accounts SET pass_hash = ?, updated_at = ? WHERE id = ?'),
+  accountSetEmail: db.prepare('UPDATE accounts SET email = ?, updated_at = ? WHERE id = ?'),
+  accountSetVerified: db.prepare('UPDATE accounts SET verified = 1, updated_at = ? WHERE id = ?'),
+  accountSetEmailVerified: db.prepare(
+    'UPDATE accounts SET email = ?, verified = 1, updated_at = ? WHERE id = ?'
+  ),
+  accountDelete: db.prepare('DELETE FROM accounts WHERE id = ?'),
+  accountAll: db.prepare('SELECT id, name, email, verified, created_at FROM accounts ORDER BY id'),
+  pendingAccounts: db.prepare('SELECT id, name, email FROM accounts WHERE verified = 0 AND created_at < ?'),
+  accountBytes: db.prepare('SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM diary WHERE account_id = ?'),
 
   diaryByAccount: db.prepare(
     'SELECT * FROM diary WHERE account_id = ? ORDER BY date DESC, id DESC'
@@ -93,7 +142,32 @@ export const stmt = {
   sessionGet: db.prepare('SELECT * FROM sessions WHERE token_hash = ?'),
   sessionTouch: db.prepare('UPDATE sessions SET exp = ? WHERE token_hash = ?'),
   sessionDelete: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
+  sessionDeleteByAccount: db.prepare('DELETE FROM sessions WHERE account_id = ?'),
   sessionPurge: db.prepare('DELETE FROM sessions WHERE exp <= ?'),
+
+  codeInsert: db.prepare(
+    `INSERT INTO email_codes (email, account_id, purpose, code_hash, exp, attempts, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?)`
+  ),
+  codeLatest: db.prepare(
+    `SELECT * FROM email_codes
+     WHERE email = ? COLLATE NOCASE AND purpose = ? AND used_at IS NULL
+     ORDER BY created_at DESC, id DESC LIMIT 1`
+  ),
+  codeRecent: db.prepare(
+    `SELECT COUNT(*) AS n FROM email_codes
+     WHERE email = ? COLLATE NOCASE AND purpose = ? AND created_at > ?`
+  ),
+  // Cooldown is measured from the last code sent, used or not, so redeeming a
+  // code cannot be used to skip the "one per minute" rule.
+  codeLastCreated: db.prepare(
+    `SELECT created_at FROM email_codes
+     WHERE email = ? COLLATE NOCASE AND purpose = ?
+     ORDER BY created_at DESC, id DESC LIMIT 1`
+  ),
+  codeBumpAttempts: db.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE id = ?'),
+  codeMarkUsed: db.prepare('UPDATE email_codes SET used_at = ? WHERE id = ?'),
+  codePurge: db.prepare('DELETE FROM email_codes WHERE created_at < ?'),
 
   failGet: db.prepare('SELECT * FROM login_fails WHERE lkey = ?'),
   failUpsert: db.prepare(
