@@ -417,6 +417,88 @@ async function changePassword(req, res) {
   sendJson(res, 200, { ok: true });
 }
 
+/* --------------------------------------------------------------------- plaza */
+
+// The plaza is shared, so a post carries its author's name and whether the
+// reader is looking at their own post (only those get a delete button).
+function plazaItem(row, user) {
+  return {
+    id: row.id,
+    body: row.body,
+    author: row.author,
+    createdAt: row.created_at,
+    mine: !!user && row.account_id === user.id,
+  };
+}
+
+function normalizePost(input) {
+  // Normalise line endings and trim, then squeeze runs of blank lines: keeps a
+  // pasted wall of whitespace from stretching the list without editing words.
+  const raw = String(input.body ?? '').replace(/\r\n?/g, '\n').trim();
+  const body = raw.replace(/\n{3,}/g, '\n\n');
+  if (!body) fail(400, 'empty_post');
+  if (body.length > config.plazaMaxLen) {
+    fail(400, 'too_long', { max: config.plazaMaxLen });
+  }
+  return body;
+}
+
+async function listPlaza(req, res, url) {
+  const { user } = currentUser(req);
+  if (!user) fail(401, 'unauthorized');
+  const asked = Number(url.searchParams.get('limit'));
+  const limit = Math.min(50, Math.max(1, Number.isFinite(asked) && asked > 0 ? asked : config.plazaPageSize));
+  const before = Number(url.searchParams.get('before')) || 0;
+  const rows =
+    before > 0
+      ? stmt.plazaPageBefore.all(before, limit + 1)
+      : stmt.plazaPageLatest.all(limit + 1);
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const payload = { items: page.map((row) => plazaItem(row, user)), hasMore };
+  // The total only means something on the first page; the client shows it once.
+  if (!before) payload.total = stmt.plazaCount.get().n;
+  sendJson(res, 200, payload);
+}
+
+async function createPlaza(req, res) {
+  guardWrite(req);
+  const { user } = currentUser(req);
+  if (!user) fail(401, 'unauthorized');
+  const body = normalizePost(await readJson(req));
+  const now = Date.now();
+
+  // Rate limits are counted from rows in the table rather than an in-memory
+  // window: a restart must not hand out a fresh burst, and a rejected post must
+  // not quietly eat one of the hourly slots.
+  const last = stmt.plazaLastByAccount.get(user.id);
+  if (last && now - last.created_at < config.plazaCooldownSec * 1000) {
+    const wait = Math.ceil((last.created_at + config.plazaCooldownSec * 1000 - now) / 1000);
+    fail(429, 'too_fast', { retryAfter: Math.max(1, wait) });
+  }
+  const since = now - 3600_000;
+  if (stmt.plazaRecentByAccount.get(user.id, since).n >= config.plazaPerHour) {
+    const oldest = stmt.plazaOldestRecent.get(user.id, since);
+    const wait = oldest ? Math.ceil((oldest.created_at + 3600_000 - now) / 1000) : 3600;
+    fail(429, 'too_many', { retryAfter: Math.max(1, wait) });
+  }
+
+  const info = stmt.plazaInsert.run(user.id, body, now);
+  const row = stmt.plazaById.get(Number(info.lastInsertRowid));
+  sendJson(res, 201, { item: plazaItem(row, user) });
+}
+
+async function deletePlaza(req, res, id) {
+  guardWrite(req);
+  const { user } = currentUser(req);
+  if (!user) fail(401, 'unauthorized');
+  const info = stmt.plazaDeleteOwn.run(id, user.id);
+  // Someone else's post answers exactly like a missing one: the plaza is
+  // readable by everyone, but only the author needs to know what exists.
+  if (!info.changes) fail(404, 'not_found');
+  sendJson(res, 200, { ok: true });
+}
+
 async function health(req, res) {
   const mem = process.memoryUsage();
   sendJson(res, 200, {
@@ -447,6 +529,8 @@ async function route(req, res) {
   if (path === '/api/diary' && method === 'GET') return listDiary(req, res, url);
   if (path === '/api/diary' && method === 'POST') return createDiary(req, res);
   if (path === '/api/quiz/answer' && method === 'POST') return quizAnswer(req, res);
+  if (path === '/api/plaza' && method === 'GET') return listPlaza(req, res, url);
+  if (path === '/api/plaza' && method === 'POST') return createPlaza(req, res);
 
   const m = /^\/api\/diary\/(\d+)$/.exec(path);
   if (m) {
@@ -454,6 +538,9 @@ async function route(req, res) {
     if (method === 'PUT' || method === 'PATCH') return updateDiary(req, res, id);
     if (method === 'DELETE') return deleteDiary(req, res, id);
   }
+
+  const pm = /^\/api\/plaza\/(\d+)$/.exec(path);
+  if (pm && method === 'DELETE') return deletePlaza(req, res, Number(pm[1]));
 
   fail(404, 'not_found');
 }

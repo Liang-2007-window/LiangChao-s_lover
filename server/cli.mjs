@@ -9,6 +9,8 @@
 //   node server/cli.mjs list
 //   node server/cli.mjs backup [dir]
 //   node server/cli.mjs prune
+//   node server/cli.mjs plaza-list [n]
+//   node server/cli.mjs plaza-rm <id>
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -175,7 +177,31 @@ function prune() {
   console.log(`sessions purged, ${dropped} unverified signups dropped; db size ${before} -> ${after}`);
 }
 
+function listPlaza(limit) {
+  const n = Math.min(200, Math.max(1, Number(limit) || 20));
+  const rows = stmt.plazaPageLatest.all(n);
+  if (!rows.length) return console.log('(plaza is empty)');
+  for (const row of rows) {
+    const when = new Date(row.created_at).toISOString().replace('T', ' ').slice(0, 16);
+    const body = row.body.replace(/\s+/g, ' ').slice(0, 40);
+    console.log(`${String(row.id).padStart(5)}  ${when}  ${row.author.padEnd(12)}  ${body}`);
+  }
+}
+
+function removePlaza(id) {
+  if (!id) die('usage: plaza-rm <id>');
+  const info = stmt.plazaDeleteAny.run(Number(id));
+  if (!info.changes) die(`no such post: ${id}`);
+  console.log(`deleted plaza post ${id}`);
+}
+
 switch (command) {
+  case 'plaza-list':
+    listPlaza(args[0]);
+    break;
+  case 'plaza-rm':
+    removePlaza(args[0]);
+    break;
   case 'add-account':
     await addAccount(args[0], args[1], args[2]);
     break;
@@ -202,7 +228,7 @@ switch (command) {
     break;
   default:
     console.log(
-      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune'
+      'commands: add-account | set-password | set-email | import-json | import-blob | list | backup | prune | plaza-list | plaza-rm'
     );
     process.exit(command ? 1 : 0);
 }

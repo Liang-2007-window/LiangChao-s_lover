@@ -59,6 +59,8 @@ before(async () => {
   process.env.LD_REG_HOURLY = '100';
   process.env.LD_LOGIN_MAX = '1000';
   process.env.LD_QUIZ_PER_MINUTE = '1000';
+  process.env.LD_PLAZA_COOLDOWN = '0';
+  process.env.LD_PLAZA_HOURLY = '100';
 
   ({ server } = await import('../server/index.mjs'));
   ({ default: db, stmt } = await import('../server/db.mjs'));

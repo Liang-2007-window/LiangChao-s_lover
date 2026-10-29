@@ -73,6 +73,17 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS email_codes_lookup ON email_codes(email, purpose, created_at DESC);
+
+  -- The plaza: one shared wall for every signed-in account. Bodies are stored
+  -- as plain text on purpose - posts are public by definition, and keeping them
+  -- readable means listing a page never has to decrypt 20 payloads.
+  CREATE TABLE IF NOT EXISTS plaza (
+    id         INTEGER PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    body       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS plaza_account ON plaza(account_id, id DESC);
 `);
 
 // ALTER TABLE has no IF NOT EXISTS, so migrations are spelled out and skipped
@@ -178,6 +189,39 @@ export const stmt = {
 
   metaGet: db.prepare('SELECT v FROM meta WHERE k = ?'),
   metaSet: db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v'),
+
+  // ------------------------------------------------------------------ plaza
+  // id DESC is chronological order (ids only ever grow), so no date column is
+  // needed for sorting and the cursor is just "the last id I saw".
+  plazaPageLatest: db.prepare(
+    `SELECT p.id, p.body, p.created_at, p.account_id, a.name AS author
+     FROM plaza p JOIN accounts a ON a.id = p.account_id
+     ORDER BY p.id DESC LIMIT ?`
+  ),
+  plazaPageBefore: db.prepare(
+    `SELECT p.id, p.body, p.created_at, p.account_id, a.name AS author
+     FROM plaza p JOIN accounts a ON a.id = p.account_id
+     WHERE p.id < ? ORDER BY p.id DESC LIMIT ?`
+  ),
+  plazaInsert: db.prepare('INSERT INTO plaza (account_id, body, created_at) VALUES (?, ?, ?)'),
+  plazaById: db.prepare(
+    `SELECT p.id, p.body, p.created_at, p.account_id, a.name AS author
+     FROM plaza p JOIN accounts a ON a.id = p.account_id WHERE p.id = ?`
+  ),
+  plazaDeleteOwn: db.prepare('DELETE FROM plaza WHERE id = ? AND account_id = ?'),
+  plazaDeleteAny: db.prepare('DELETE FROM plaza WHERE id = ?'),
+  plazaCount: db.prepare('SELECT COUNT(*) AS n FROM plaza'),
+  plazaLastByAccount: db.prepare(
+    'SELECT created_at FROM plaza WHERE account_id = ? ORDER BY id DESC LIMIT 1'
+  ),
+  plazaRecentByAccount: db.prepare(
+    'SELECT COUNT(*) AS n FROM plaza WHERE account_id = ? AND created_at > ?'
+  ),
+  // Oldest post inside the rolling hour: once it ages out, the account may post
+  // again, which is exactly the retryAfter the client gets.
+  plazaOldestRecent: db.prepare(
+    'SELECT created_at FROM plaza WHERE account_id = ? AND created_at > ? ORDER BY created_at ASC LIMIT 1'
+  ),
 };
 
 export function tx(fn) {

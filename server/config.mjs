@@ -82,4 +82,13 @@ export const config = {
   maxEntriesPerAccount: 500,
   maxAccountBytes: 5 * 1024 * 1024,
   maxPendingHours: 24,
+
+  // ---------------------------------------------------------------- plaza
+  // The plaza is a shared wall: every signed-in account reads every post. There
+  // is no per-account storage cap because each post is at most a few hundred
+  // characters; the cooldown and the hourly ceiling are what keep it sane.
+  plazaMaxLen: Number(process.env.LD_PLAZA_MAXLEN ?? 500),
+  plazaCooldownSec: Number(process.env.LD_PLAZA_COOLDOWN ?? 20),
+  plazaPerHour: Number(process.env.LD_PLAZA_HOURLY ?? 20),
+  plazaPageSize: Number(process.env.LD_PLAZA_PAGE ?? 20),
 };
