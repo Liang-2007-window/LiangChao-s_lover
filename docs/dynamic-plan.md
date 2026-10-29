@@ -280,3 +280,12 @@ login_fails(lkey PRIMARY KEY, n, last, until)                 -- 服务端锁定
   以现在的访问量够用，量大了要改成「先落库、后台补发」。
 - 邮箱发信失败时注册会回滚（删掉刚建的 pending 账号），但用户看到的是 503 `mail_unavailable`，
   需要管理员修配置，没有自助重试入口（重试其实就是再点一次）。
+
+### 上线状态（2026-10-29 夜）
+
+- 已部署到 `47.111.150.169`，`install-server.sh` 给 `/etc/liangchao.env` 补上了 `LD_SMTP_*` 占位段。
+- 服务器上建了账号 `Liangchao`（邮箱 `1373917993@qq.com`，`cli.mjs add-account` 直接置为已验证）。
+  线上实测：答题「刘克」→ 登录 `Liangchao` → 日记页是空的「写第一篇」→ 写了一篇 → 删掉，全程正常。
+- 注册链路暂时返回 503 `mail_unavailable`（SMTP 账号密码还没填），页面提示「邮件服务暂时发不出去，稍后再试或联系管理员」；
+  注册失败时 pending 账号会回滚，实测服务器库里没有留下残号。
+- 还差一步：`sudo bash deploy/smtp-setup.sh 1373917993@qq.com <QQ邮箱SMTP授权码>`，然后注册页就能真发信。
