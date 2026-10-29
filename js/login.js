@@ -2,18 +2,15 @@
  * 登录入口交互
  *  - 显示 / 隐藏密码
  *  - 手机软键盘弹出时，把登录框整体抬起来
- *  - 提交 → Auth.login 校验 → 成功淡出并进入日记页
- *  - 连续输错：第 3 次起暂时锁定，时间逐次加倍（15 秒起，最长 15 分钟），刷新页面也不会清零
+ *  - 提交 → Auth.login（服务端校验）→ 成功淡出并进入日记页
+ *  - 连续输错：锁定完全由服务端决定（同一 IP + 账号，3 次起 15 秒、逐次翻倍、封顶 15 分钟），
+ *    清空浏览器存储也绕不过去；这里只负责把服务端给的 retryAfter 倒数出来。
  */
 (function () {
   'use strict';
 
   // ==================== 可以自己改的设置 ====================
   var DIARY_URL = 'diary.html';
-  var FREE_TRIES = 2;             // 前几次输错不惩罚
-  var BASE_LOCK_SEC = 15;         // 第一次锁定的秒数，之后每次翻倍
-  var MAX_LOCK_SEC = 900;         // 最长锁定 15 分钟
-  var FORGET_AFTER_MS = 60 * 60 * 1000;  // 超过 1 小时没再试，错误次数清零
   // =========================================================
 
   var root = document.getElementById('login');
@@ -65,39 +62,9 @@
     msg.textContent = text || '';
   }
 
-  // ---------- 输错次数与锁定 ----------
-  var LOCK_KEY = 'ld_lock_v1';
-  var memLock = { n: 0, until: 0, last: 0 };   // localStorage 不可用时的后备
+  // ---------- 服务端锁定倒计时 ----------
+  var blockedUntil = 0;
 
-  function readLock() {
-    var o = null;
-    try { o = JSON.parse(window.localStorage.getItem(LOCK_KEY)); } catch (e) { /* 忽略 */ }
-    if (!o || typeof o.n !== 'number') o = memLock;
-    if (Date.now() - (o.last || 0) > FORGET_AFTER_MS && Date.now() > (o.until || 0)) o = { n: 0, until: 0, last: 0 };
-    return o;
-  }
-  function writeLock(o) {
-    memLock = o;
-    try { window.localStorage.setItem(LOCK_KEY, JSON.stringify(o)); } catch (e) { /* 忽略 */ }
-  }
-  function clearLock() {
-    memLock = { n: 0, until: 0, last: 0 };
-    try { window.localStorage.removeItem(LOCK_KEY); } catch (e) { /* 忽略 */ }
-  }
-  function registerFailure() {
-    var o = readLock();
-    o.n += 1;
-    o.last = Date.now();
-    if (o.n > FREE_TRIES) {
-      var sec = Math.min(MAX_LOCK_SEC, BASE_LOCK_SEC * Math.pow(2, o.n - FREE_TRIES - 1));
-      o.until = Date.now() + sec * 1000;
-    }
-    writeLock(o);
-    return o;
-  }
-  function lockSecondsLeft() {
-    return Math.max(0, Math.ceil((readLock().until - Date.now()) / 1000));
-  }
   function fmtSeconds(s) {
     if (s < 60) return s + ' 秒';
     var m = Math.floor(s / 60), r = s % 60;
@@ -107,7 +74,7 @@
   var lockTimer = 0;
   function tickLock() {
     clearTimeout(lockTimer);
-    var left = lockSecondsLeft();
+    var left = Math.max(0, Math.ceil((blockedUntil - Date.now()) / 1000));
     if (left > 0) {
       btn.disabled = true;
       say('输错的次数有点多，请等 ' + fmtSeconds(left) + '再试', 'error');
@@ -116,6 +83,12 @@
       btn.disabled = false;
       if (msg.classList.contains('is-error')) say('');
     }
+  }
+
+  function block(seconds) {
+    if (!seconds || seconds <= 0) return;
+    blockedUntil = Date.now() + seconds * 1000;
+    tickLock();
   }
 
   // ---------- 忙碌状态 ----------
@@ -163,9 +136,7 @@
   // ---------- 提交 ----------
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (busy) return;
-
-    if (lockSecondsLeft() > 0) { tickLock(); shake(); return; }
+    if (busy || btn.disabled) return;
 
     var u = user.value, p = pass.value;
     if (!u.trim() || !p) {
@@ -174,7 +145,7 @@
       return;
     }
     if (!window.Auth || !window.Auth.supported) {
-      say('这个浏览器暂时不能安全登录，请用新版浏览器并通过 https 打开', 'error');
+      say('这个链接暂时不能登录，请用新版浏览器打开网站首页再试', 'error');
       return;
     }
 
@@ -183,33 +154,38 @@
     say('');
 
     window.Auth.login(u, p).then(function (result) {
-      if (result === 'ok') {
-        clearLock();
+      if (result.ok) {
         pass.value = '';
         say('欢迎回来 ❤', 'ok');
         leave();                     // 保持忙碌状态，直到页面跳走
         return;
       }
       setBusy(false);
-      if (result === 'nostore') {
-        say('密码对啦，但浏览器不允许保存登录状态。请关闭无痕模式或允许站点数据后再试', 'error');
+      if (result.reason === 'locked') {
+        pass.value = '';
+        shake();
+        block(result.retryAfter || 15);
+        if (!blockedUntil) say('请稍等一下再试', 'error');
         return;
       }
-      var lock = registerFailure();
+      if (result.reason === 'net') {
+        say('连不上服务器，检查一下网络再试～', 'error');
+        return;
+      }
+      if (result.reason === 'unsupported') {
+        say('这个链接暂时不能登录，请用新版浏览器打开网站首页再试', 'error');
+        return;
+      }
+      if (result.reason === 'error') {
+        say('服务器出了点小问题，稍后再试～', 'error');
+        return;
+      }
+      // 账号或密码不对
       pass.value = '';
       shake();
-      if (lockSecondsLeft() > 0) { tickLock(); }
-      else {
-        var left = FREE_TRIES - lock.n + 1;
-        say('账号或密码不对，再试试～' + (left === 1 ? '（再错一次会暂时锁定哦）' : ''), 'error');
-      }
       pass.focus({ preventScroll: true });
-    }).catch(function () {
-      setBusy(false);
-      say('出了点小问题，请刷新页面再试', 'error');
+      if (result.retryAfter) block(result.retryAfter);
+      else if (!blockedUntil) say('账号或密码不对，再试试～', 'error');
     });
   });
-
-  // 打开页面时如果上次的锁定还没过，直接接着倒计时
-  tickLock();
 })();

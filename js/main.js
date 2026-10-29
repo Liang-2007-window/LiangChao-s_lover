@@ -7,7 +7,8 @@
   'use strict';
 
   // ==================== 可以自己改的设置 ====================
-  var CORRECT_ANSWER = '刘克';
+  // 答案不写在前端了：由服务器 POST /api/quiz/answer 判断（服务端读 LD_QUIZ_ANSWER，
+  // 并有每分钟的调用上限）。想改答案请改服务器环境变量，不要改这里。
 
   // 答错时小狗会依次说这些话
   var WRONG_HINTS = [
@@ -154,12 +155,29 @@
     return s.replace(/\s+/g, '');
   }
 
+  var checking = false;
+
   function handleSubmit() {
-    if (transitionDone) return;
+    if (transitionDone || checking) return;
     var answer = normalize(answerInput.value);
     if (!answer) { showHint('请输入答案哦～'); return; }
-    if (answer === CORRECT_ANSWER) triggerTransition();
-    else showWrongHint();
+    if (!window.Auth || !window.Auth.checkAnswer) {
+      showHint('答案要问一下服务器才知道，刷新页面再试～');
+      return;
+    }
+    checking = true;
+    submitBtn.disabled = true;
+    window.Auth.checkAnswer(answer).then(function (ok) {
+      checking = false;
+      submitBtn.disabled = false;
+      if (transitionDone) return;
+      if (ok) triggerTransition();
+      else showWrongHint();
+    }, function () {
+      checking = false;
+      submitBtn.disabled = false;
+      showHint('网络好像断了，等一下再试～');
+    });
   }
 
   function showHint(msg) {

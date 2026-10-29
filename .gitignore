@@ -2,3 +2,13 @@
 desktop.ini
 Thumbs.db
 .DS_Store
+
+# 本地开发/部署时产生的东西，不进仓库
+.local/
+.data/
+node_modules/
+server/.env
+*.db
+*.db-wal
+*.db-shm
+*.log

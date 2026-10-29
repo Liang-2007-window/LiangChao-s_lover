@@ -1,0 +1,44 @@
+# ============================================================
+#  /etc/systemd/system/liangchao.service
+#  2 核 2G 的关键几行：--max-old-space-size、MemoryMax、Restart
+# ============================================================
+
+[Unit]
+Description=LiangChao diary API (node:http + node:sqlite)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/srv/liangchao/app
+EnvironmentFile=/etc/liangchao.env
+ExecStart=/usr/local/bin/node --max-old-space-size=192 server/index.mjs
+
+# 崩了立刻回来，但连续崩溃时别刷爆日志
+Restart=always
+RestartSec=2
+
+# 内存在这里封顶，Node 平时只占 60-90 MB，封 320 MB 留足余量
+MemoryMax=320M
+MemoryHigh=256M
+
+# 收紧权限：文件系统只读，唯一可写是自己的数据目录
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/liangchao
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=liangchao
+
+[Install]
+WantedBy=multi-user.target

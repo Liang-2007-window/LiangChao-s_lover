@@ -1,8 +1,7 @@
 /**
- * 日记页：确认登录 → 解密日记 → 排版显示
+ * 日记页：确认登录 → 从服务器取日记 → 排版显示
  *
- * 日记内容按账号分开：data/diary.<账号>.enc.json（以及给 file:// 用的 data/diary.blobs.js），
- * 每个账号用自己的密码派生出的密钥解开，互相看不到。
+ * 重构后内容存在服务器上（正文 AES-256-GCM 加密后落库），登录状态由服务端 Cookie 维持。
  * 每篇日记的格式（date 和 body 必填，其余选填）：
  *   { "date": "2026-10-17", "title": "标题", "weather": "晴", "mood": "开心", "body": "正文\n\n空一行是新的一段" }
  * 页面上所有文字都用 textContent 写入，日记里即使出现 < > 之类的符号也只会当普通文字显示。
@@ -18,14 +17,10 @@
 
   function toLogin() { window.location.replace(LOGIN_URL); }
 
-  // 没登录（或登录已过期）就回登录页
-  if (!window.Auth || !window.Auth.isLoggedIn()) { toLogin(); return; }
-
-  // 标题上带一下账号名，免得两个账号的日记混在一起看迷糊
-  var me = window.Auth.currentUser();
-  if (me) {
-    document.title = '我们的日记 · ' + me;
-    document.body.setAttribute('data-account', me);
+  if (!window.Auth || !window.Auth.supported) {
+    // 直接双击打开的本地文件没有后端，日记页只能回首页
+    toLogin();
+    return;
   }
 
   var $ = function (id) { return document.getElementById(id); };
@@ -36,9 +31,11 @@
   var sortLabel = $('sort-label');
   var endEl = $('end');
   var progressEl = $('progress');
+  var newBtn = $('new-entry');
 
   var list = [];
   var order = readSort();
+  var me = null;
 
   // ---------- 小工具 ----------
   function el(tag, cls, text) {
@@ -135,6 +132,19 @@
       if (para) text.appendChild(el('p', null, para));
     });
     what.appendChild(text);
+
+    // 只有登录着的本人看得到这两个按钮（服务端同样会校验，不只是藏起来）
+    var actions = el('div', 'entry-actions');
+    var edit = el('button', 'link-btn', '编辑');
+    edit.type = 'button';
+    edit.addEventListener('click', function () { window.Editor.open(e); });
+    var del = el('button', 'link-btn', '删除');
+    del.type = 'button';
+    del.addEventListener('click', function () { removeEntry(e); });
+    actions.appendChild(edit);
+    actions.appendChild(del);
+    what.appendChild(actions);
+
     art.appendChild(what);
     return art;
   }
@@ -167,6 +177,20 @@
     sortBtn.setAttribute('data-order', order);
     sortLabel.textContent = order === 'new' ? '最新在前' : '最早在前';
     sortBtn.setAttribute('aria-label', '当前' + sortLabel.textContent + '，点击切换顺序');
+    sortBtn.hidden = list.length < 2;
+    endEl.hidden = !list.length;
+  }
+
+  function paint() {
+    subEl.textContent = list.length ? subText() : '';
+    if (!list.length) {
+      entriesEl.textContent = '';
+      showState('这里还空着，等着写下第一篇。', [{ label: '写第一篇', fn: function () { window.Editor.open(); } }]);
+      endEl.hidden = true;
+      return;
+    }
+    hideState();
+    render();
   }
 
   sortBtn.addEventListener('click', function () {
@@ -177,41 +201,53 @@
     if (window.pageYOffset > top) window.scrollTo(0, Math.max(0, top));   // 换了顺序，从头开始读
   });
 
+  if (newBtn) newBtn.addEventListener('click', function () { window.Editor.open(); });
+
   // ---------- 加载 ----------
   function load() {
     showState('翻开中…', null, true);
-    window.Auth.loadEncrypted().then(function (data) {
-      if (!Array.isArray(data)) throw new Error('shape');
-      list = data.filter(function (e) { return e && typeof e === 'object' && typeof e.body === 'string' && e.body.trim(); });
-      if (!list.length) {
-        subEl.textContent = '';
-        showState('这里还空着，等着写下第一篇。');
-        return;
-      }
-      hideState();
-      subEl.textContent = subText();
-      sortBtn.hidden = list.length < 2;
-      render();
-      endEl.hidden = false;
+    return window.Auth.loadDiary(order).then(function (data) {
+      list = (data || []).filter(function (e) {
+        return e && typeof e === 'object' && typeof e.body === 'string' && e.body.trim();
+      });
+      paint();
     }).catch(onLoadError);
+  }
+
+  /** 保存/删除后重新拉一遍，尽量不动读者的滚动位置 */
+  function reload() {
+    var y = window.pageYOffset;
+    return window.Auth.loadDiary(order).then(function (data) {
+      list = (data || []).filter(function (e) {
+        return e && typeof e === 'object' && typeof e.body === 'string' && e.body.trim();
+      });
+      paint();
+      window.scrollTo(0, Math.min(y, document.documentElement.scrollHeight - window.innerHeight));
+    }, function (err) {
+      onLoadError(err);
+    });
+  }
+
+  function removeEntry(e) {
+    if (!window.confirm('删除「' + (e.title || e.date) + '」？删了就找不回来了。')) return;
+    window.Auth.deleteDiary(e.id).then(function () {
+      list = list.filter(function (x) { return x.id !== e.id; });
+      paint();
+    }, function (err) {
+      if (err && err.status === 401) { toLogin(); return; }
+      window.alert('没删掉，再试一次。');
+    });
   }
 
   function relogin() { window.Auth.logout(); toLogin(); }
 
   function onLoadError(err) {
-    var name = err && err.name, msg = (err && err.message) || '';
-    if (msg === 'not-logged-in') { toLogin(); return; }
-    if (name === 'OperationError' || name === 'DataError' || name === 'InvalidAccessError') {
-      // 密钥对不上：多半是密码改过了，或登录信息损坏
-      showState('日记暂时打不开：登录信息已经失效，请重新登录。', [{ label: '重新登录', fn: relogin }]);
-    } else if (name === 'TypeError' && /^file:/.test(window.location.protocol)) {
-      // file:// 下浏览器不允许 fetch 读本地文件，通常是没有一起放 data/diary.blobs.js
-      showState('日记文件没读到：直接双击打开网页时，日记要跟着 data/diary.blobs.js 一起读。请确认它就在网站目录里（或者用一个本地服务器打开）。', [{ label: '刷新试试', fn: function () { window.location.reload(); } }]);
-    } else if (name === 'TypeError' || /^http-/.test(msg)) {
+    if (err && err.status === 401) { toLogin(); return; }
+    if (!err || !err.status) {
       showState('网络好像不太稳定，日记没能加载出来。', [{ label: '再试一次', fn: load }]);
-    } else {
-      showState('出了点小问题，日记没能打开。', [{ label: '再试一次', fn: load }, { label: '重新登录', fn: relogin }]);
+      return;
     }
+    showState('出了点小问题，日记没能打开。', [{ label: '再试一次', fn: load }, { label: '重新登录', fn: relogin }]);
   }
 
   // ---------- 退出 / 回到顶部 ----------
@@ -228,7 +264,7 @@
     window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   });
 
-  // 登录状态失效后（退出、过期），从缓存或后台回到这一页，要立刻回登录页
+  // 登录状态过期后（退出、超时），从缓存或后台回到这一页，要立刻回登录页
   window.addEventListener('pageshow', function (e) {
     if (e.persisted && !window.Auth.isLoggedIn()) { entriesEl.textContent = ''; toLogin(); }
   });
@@ -249,5 +285,14 @@
     if (!ticking) { ticking = true; requestAnimationFrame(paintProgress); }
   }, { passive: true });
 
-  load();
+  // ---------- 启动：先问服务器登录状态 ----------
+  window.Auth.me().then(function (name) {
+    if (!name) { toLogin(); return; }
+    me = name;
+    // 标题上带一下账号名，免得两个账号的日记混在一起看迷糊
+    document.title = '我们的日记 · ' + me;
+    document.body.setAttribute('data-account', me);
+    window.Editor.init({ onSaved: reload });
+    load();
+  });
 })();
