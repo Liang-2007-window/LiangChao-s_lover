@@ -23,6 +23,16 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
 };
 
+// Dev only: never let the browser keep an old script or stylesheet around after
+// an edit - that once made a brand new page call a function the browser's cached
+// copy did not have yet. Media can still be cached briefly.
+const CACHE = {
+  '.html': 'no-cache',
+  '.css': 'no-cache',
+  '.js': 'no-cache',
+  '.mjs': 'no-cache',
+};
+
 export function serveStatic(req, res, urlPath) {
   const root = config.root;
   let rel = decodeURIComponent(urlPath.split('?')[0]);
@@ -51,7 +61,7 @@ export function serveStatic(req, res, urlPath) {
     'content-type': MIME[ext] || 'application/octet-stream',
     'content-length': stat.size,
     'last-modified': stat.mtime.toUTCString(),
-    'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
+    'cache-control': CACHE[ext] || 'public, max-age=3600',
   };
   res.writeHead(200, headers);
   fs.createReadStream(full).pipe(res);

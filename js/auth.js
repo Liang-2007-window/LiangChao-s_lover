@@ -146,6 +146,31 @@
       .then(function (d) { return !!(d && d.ok); });
   }
 
+  // ---------- 广场 ----------
+  // 和日记相反，广场是所有人共用的：帖子明文存在服务器上，登录后谁都能读。
+
+  function loadPlaza(before, limit) {
+    var q = [];
+    if (before) q.push('before=' + encodeURIComponent(before));
+    if (limit) q.push('limit=' + encodeURIComponent(limit));
+    return global.Api.get('/api/plaza' + (q.length ? '?' + q.join('&') : '')).then(function (d) {
+      return {
+        items: (d && d.items) || [],
+        hasMore: !!(d && d.hasMore),
+        total: d && typeof d.total === 'number' ? d.total : null
+      };
+    });
+  }
+
+  function postPlaza(body) {
+    return global.Api.post('/api/plaza', { body: String(body == null ? '' : body) })
+      .then(function (d) { return d.item; });
+  }
+
+  function deletePlaza(id) {
+    return global.Api.del('/api/plaza/' + encodeURIComponent(id));
+  }
+
   global.Auth = {
     supported: supported,
     me: me,
@@ -164,6 +189,9 @@
     createDiary: createDiary,
     updateDiary: updateDiary,
     deleteDiary: deleteDiary,
-    checkAnswer: checkAnswer
+    checkAnswer: checkAnswer,
+    loadPlaza: loadPlaza,
+    postPlaza: postPlaza,
+    deletePlaza: deletePlaza
   };
 })(window);

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#F6F0E6">
+  <title>广场</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/serif-light.woff" as="font" type="font/woff" crossorigin>
+  <!-- 与日记页同一张纸，切换页面时不闪白 -->
+  <style>html, body { background: #F6F0E6; }</style>
+  <link rel="stylesheet" href="css/diary.css">
+  <link rel="stylesheet" href="css/plaza.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <a class="link-btn" href="diary.html">回日记</a>
+    <a class="link-btn" href="settings.html">账号设置</a>
+    <button class="link-btn" id="logout-top" type="button">退出登录</button>
+  </header>
+
+  <main class="page plaza">
+    <section class="masthead" aria-labelledby="plaza-title">
+      <svg class="mark" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 5.5h16v10H9.5L4 19.5z"></path>
+      </svg>
+      <h1 class="title" id="plaza-title">广场</h1>
+      <p class="sub" id="sub">这里所有人都看得见</p>
+    </section>
+
+    <section class="composer" aria-label="写一条">
+      <label class="editor-label" for="post-body">说点什么</label>
+      <textarea id="post-body" rows="3" maxlength="500" placeholder="今天想说的话，写在这里…"></textarea>
+      <div class="composer-foot">
+        <span class="count" id="count" aria-hidden="true">0/500</span>
+        <span class="composer-msg" id="post-msg" role="status" aria-live="polite"></span>
+        <button class="pill primary" id="post-btn" type="button">发布</button>
+      </div>
+    </section>
+
+    <div class="state" id="state" role="status" aria-live="polite"></div>
+
+    <div class="posts" id="posts"></div>
+
+    <div class="more" id="more-wrap" hidden>
+      <button class="pill" id="more-btn" type="button">加载更多</button>
+    </div>
+
+    <footer class="end" id="end" hidden>
+      <svg class="mark" viewBox="0 0 32 30" width="16" height="15" aria-hidden="true"><path d="M16,28 C-6,14 4,-4 16,8 C28,-4 38,14 16,28 Z" fill="currentColor"/></svg>
+      <p class="end-text">看到这儿啦</p>
+      <div class="end-actions">
+        <button class="link-btn" id="to-top" type="button">回到顶部</button>
+        <span class="dot" aria-hidden="true"></span>
+        <a class="link-btn" href="diary.html">回日记</a>
+      </div>
+    </footer>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/plaza.js"></script>
+</body>
+</html>

@@ -300,3 +300,64 @@ login_fails(lkey PRIMARY KEY, n, last, until)                 -- 服务端锁定
   说明邮件被 QQ 接受了；浏览器里走完注册页第一步，界面正常进到「填验证码」并开始 58 秒倒计时。
 - 测试用的待验证账号（`MailTest` / `MailTest2`）验证完即从库里删掉，邮箱不占用。
 - 未做：邮件进入垃圾箱的概率、QQ 对高频发信的限流，等有真实注册量再看。
+
+## 13. 广场：登录账号共用的墙（2026-10-29 深夜）
+
+### 边界
+
+- 只有登录的账号能看、能发（和日记同一道门）；不做回复、点赞、发图，不渲染 HTML/Markdown。
+- 作者可删自己的帖子，别人删一律 404；站长用 `cli.mjs plaza-rm <id>` 兜底。
+- **明文存储**：日记整条加密是因为私密，广场本来就是给所有人看的，加密只会让每次翻页多 20 次
+  AES 解密。代价写进 README：数据库和备份里的广场正文可以直接读。
+
+### 数据模型
+
+```sql
+CREATE TABLE plaza (
+  id         INTEGER PRIMARY KEY,        -- 也当时间序用，id 只增不减
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  body       TEXT    NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX plaza_account ON plaza(account_id, id DESC);
+```
+
+删账号时帖子跟着走（`foreign_keys=ON` 已在建库时打开）。分页游标就是「上一页最后一个 id」，
+`WHERE id < ? ORDER BY id DESC LIMIT ?`，多取一条判断 `hasMore`，不需要 count 也能翻页；
+`total` 只在第一页算一次。
+
+### 限流
+
+| 规则 | 值 | 实现 |
+|---|---|---|
+| 一条最长 | 500 字 | `LD_PLAZA_MAXLEN`，服务端 trim 后按字符数算 |
+| 冷却 | 20 秒一条 | `LD_PLAZA_COOLDOWN`，查该账号最后一条的 `created_at` |
+| 每小时 | 20 条 | `LD_PLAZA_HOURLY`，数 `created_at > now-1h` 的行数 |
+| 每页 | 20 条（最多 50） | `LD_PLAZA_PAGE` |
+
+限流**不从内存桶算**（那是登录/答题的 `hitRate`）：重启后进程内的窗口会清零，
+而「20 秒一条」必须跨重启也成立；同时被拒绝的请求不该吃掉一次额度。
+代价是每次发帖多两条走索引的小查询，量级上可以忽略。
+
+### 前端
+
+`plaza.html` + `css/plaza.css` + `js/plaza.js`，直接复用 `diary.css` 的纸色、顶栏、masthead——
+两个页面是同一个房间的两面，颜色跳变比省几行 CSS 更刺眼。`js/auth.js` 加 `loadPlaza / postPlaza / deletePlaza`。
+
+帖子里所有内容走 `textContent`，`<b>` 只会显示成字面的 `<b>`；正文用 `white-space: pre-line`
+保留换行，`overflow-wrap: anywhere` 防止一串英文数字撑破版面。429 时按钮跟着服务端给的
+`retryAfter` 一起倒数，省得用户一下下点。
+
+### 踩坑
+
+- **浏览器缓存的旧 `auth.js`**：改了 `js/auth.js` 加 `loadPlaza`，页面里 `Auth.loadPlaza` 是 `undefined`，
+  表现为广场一直停在「正在打开广场…」，服务器日志里**根本没有 `/api/plaza` 请求**。
+  nginx/静态服务给 js 设了 `Cache-Control: max-age=3600`，刷新不会重新拉。
+  修法：`fetch('/js/auth.js', {cache:'reload'})` 把缓存换掉再刷新；以后改 js 要么换 URL 后缀，要么强制 reload。
+- 表单/按钮 id 别和 DOM 内置属性重名（上一次是 `forgot.html` 的 `reset`），这次没有新犯，记着。
+
+### 遗留
+
+- 没有实时刷新：别人新发的帖子要重新进页面才看得到（没上 SSE/WebSocket，2C2G 不划算）。
+- 广场内容明文进备份（`pull-backup.ps1` 拉回本机的 db 里同样能读）。
+- 没有举报/屏蔽；只有站长 CLI 能强行删。
