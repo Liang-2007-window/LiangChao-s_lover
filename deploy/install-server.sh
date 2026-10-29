@@ -46,7 +46,15 @@ sleep 1
 systemctl --no-pager --lines=5 status liangchao || true
 
 echo "==> 4/7 Nginx 站点"
-install -m 644 "$HERE/nginx-liangchao.conf" /etc/nginx/sites-available/liangchao
+install -d -m 755 /etc/nginx/snippets
+install -m 644 "$HERE/liangchao-headers.conf" /etc/nginx/snippets/liangchao-headers.conf
+if [ -f /etc/ssl/liangchao/fullchain.pem ]; then
+  install -m 644 "$HERE/nginx-liangchao-tls.conf" /etc/nginx/sites-available/liangchao
+  echo "    已找到证书（/etc/ssl/liangchao），装 HTTPS 版配置"
+else
+  install -m 644 "$HERE/nginx-liangchao.conf" /etc/nginx/sites-available/liangchao
+  echo "    还没有证书，先用 HTTP 版；签好证书后跑 deploy/issue-cert.sh"
+fi
 ln -sfn /etc/nginx/sites-available/liangchao /etc/nginx/sites-enabled/liangchao
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
@@ -65,7 +73,11 @@ mkdir -p /var/log/journal
 systemctl restart systemd-journald 2>/dev/null || true
 
 echo "==> 7/7 自检"
-curl -fsS http://127.0.0.1/api/health || { echo "!! API 没起来，看 journalctl -u liangchao -n 50"; exit 1; }
-echo
-curl -fsS -o /dev/null -w "static / -> %{http_code}\n" http://127.0.0.1/
+if [ -f /etc/ssl/liangchao/fullchain.pem ]; then
+  curl -fsS -o /dev/null -w "api  /api/health -> %{http_code}\n" --resolve selfweb.eu.cc:443:127.0.0.1 https://selfweb.eu.cc/api/health || { echo "!! API 没起来，看 journalctl -u liangchao -n 50"; exit 1; }
+  curl -fsS -o /dev/null -w "static / -> %{http_code}\n" --resolve selfweb.eu.cc:443:127.0.0.1 https://selfweb.eu.cc/
+else
+  curl -fsS -o /dev/null -w "api  /api/health -> %{http_code}\n" http://127.0.0.1/api/health || { echo "!! API 没起来，看 journalctl -u liangchao -n 50"; exit 1; }
+  curl -fsS -o /dev/null -w "static / -> %{http_code}\n" http://127.0.0.1/
+fi
 echo "完成。"

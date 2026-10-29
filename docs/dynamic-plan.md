@@ -176,3 +176,44 @@ login_fails(lkey PRIMARY KEY, n, last, until)                 -- 服务端锁定
 - 800 次请求（并发 10，含 200 次 `/api/health`）：全部 200，p95 ≈ 170 ms（主要是到杭州的公网 RTT），Node RSS 63 → 66 MB，无泄漏迹象。
 - gzip 生效（style.css 35 KB → 约 7 KB），html `no-cache`，js/css 1 小时，媒体 30 天。
 - 备份脚本已跑通：`/var/backups/liangchao/` 下同时有 db 与 `env-*.txt`（含 LD_DATA_KEY），每日 03:20 由 `/etc/cron.d/liangchao-backup` 触发，校验 `integrity_check` 并留 7 天。
+---
+
+## 11. HTTPS：撞上 ICP，改走 tls-alpn-01
+
+原计划（P4 之后）是给站点加域名 + HTTPS，走最常规的 `certbot --webroot`（HTTP-01，需要 80 端口能被 Let's Encrypt 读到）。实际卡在这里：
+
+- 域名 `selfweb.eu.cc` 在聚名解析，`@` / `www` 两条 A 记录指向 `47.111.150.169`，DNS 生效正常。
+- 从公网访问 `http://selfweb.eu.cc/` 返回 **403**，页面标题 `Non-compliance ICP Filing`，响应头 `server: Beaver` —— 这是阿里云对**未备案域名 80 端口**的 ICP 拦截，发生在网络侧，服务器本地 `curl -H "Host: selfweb.eu.cc" 127.0.0.1` 是 200。
+- 于是 `certbot --webroot` 校验失败：`Invalid response from http://selfweb.eu.cc/.well-known/acme-challenge/…: 403`。
+- 实测 **443 端口不受影响**：自签证书做 TLS 握手 + SNI 测试，从公网拿到 200。
+
+结论：只要 80 端口做不了 HTTP-01，就必须换一种**不碰 80** 的校验方式。可选三种：
+
+| 方案 | 可行性 | 结论 |
+|---|---|---|
+| HTTP-01（80） | 被 ICP 拦死 | 不可用 |
+| DNS-01 | 可行，但要 `julydns` 的 API（没有），或把 NS 迁到阿里云/Cloudflare 再要 AccessKey | 要用户交出 API 密钥、且要改 NS，改动面大 |
+| **tls-alpn-01（443）** | 可行，acme.sh 自带 standalone alpn 模式 | **采用**：不需要任何密钥，不需要改 NS，只为一次验证临时占用 443 |
+
+落地细节：
+
+- acme.sh 从 GitHub 装不上（`curl https://get.acme.sh` 报 `SSL connection timeout`），改从 **gitee 镜像 `https://gitee.com/neilpang/acme.sh.git`** clone 到 `/opt/acme.sh` 再 `--install`。
+- alpn 模式的监听器要 `socat`（服务器原本没装，`apt-get install socat`）。
+- 签发：`acme.sh --issue --alpn -d selfweb.eu.cc -d www.selfweb.eu.cc --server letsencrypt`，证书经 `--install-cert` 落到 `/etc/ssl/liangchao/{fullchain,privkey}.pem`。
+- **续期与原计划不同**：alpn 验证必须独占 443，而线上 nginx 常驻 443。所以 `--reloadcmd` 写成
+  `systemctl is-active --quiet nginx && systemctl reload nginx || true`（nginx 停着时不报错），
+  并另加包装脚本 `/usr/local/bin/liangchao-renew.sh`：停 nginx → `acme.sh --cron` → 起 nginx，
+  由 cron 每天 04:17 执行（脚本见 `deploy/renew-cert.sh`）。acme.sh 自己装的 cron 会删掉，否则它会在 443 被占时失败。
+  实测强制续期成功（停机约 16 秒），未到期时 acme.sh 自己跳过，停机 1-2 秒。
+- nginx 1.18 **不认** `http2 on;` 指令（1.25.1 才有），只能写 `listen 443 ssl http2;`。
+- `add_header` 没有「继承后追加」的语义：某个 location 里一写 `add_header`，server 级的 HSTS 等安全头就全部失效。
+  为避免漏，把四条安全头抽成 `deploy/liangchao-headers.conf`（装到 `/etc/nginx/snippets/`），
+  每个自带 `add_header` 的 location 都 `include` 一次。校验过 `/`、`/diary.html`、`/css/*.css` 都带 HSTS。
+- HTTPS 生效后 Cookie 自动带 `Secure`：`server/index.mjs:86` 的 `secure: wantsHttps(req)` 读 `X-Forwarded-Proto`，
+  nginx 已在 `/api/` 里传 `$scheme`，所以**代码一行没改**。
+
+线上验证：`https://selfweb.eu.cc/` 200、`/diary.html` 200、`/api/health` 200（GET；HEAD 会 404，因为路由只处理 GET）、
+`/server/config.mjs` 404；浏览器实测答题 →「刘克」→ 密码 `20050721` → 进入 `我们的日记 · liuke`，6 篇正常渲染，
+`document.cookie` 为空（会话 Cookie 是 HttpOnly）。
+
+遗留：`http://selfweb.eu.cc` 仍然会看到阿里云的 ICP 403 页面，这不是配置问题，只能靠备案或让用户始终用 `https://`。

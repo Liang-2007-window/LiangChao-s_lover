@@ -42,12 +42,27 @@ ssh root@47.111.150.169 'bash /srv/liangchao/app/deploy/install-server.sh'   # �
 - 每天 03:20 `/usr/local/bin/liangchao-backup.sh` 备份数据库和密钥，留 7 天。
   **密钥丢了日记就永久打不开**，备份要一起带走。
 
+## 域名与 HTTPS
+
+站点地址是 **https://selfweb.eu.cc**（`www` 同）。用 `https://` 打开，别用 `http://`——
+
+> 阿里云会对未备案域名的 **80 端口**做 ICP 拦截，返回 403 页面（`Non-compliance ICP Filing`，
+> 响应头 `server: Beaver`）。443 端口的 TLS 不受影响，所以证书只能用 **tls-alpn-01** 签发，
+> 不能用常见的 HTTP-01（那需要 80 端口能被 Let's Encrypt 读到）。
+
+- DNS 在聚名（juyu.com）：`@` 和 `www` 两条 A 记录都指向 `47.111.150.169`。
+- 证书 Let's Encrypt，acme.sh 装在 `/opt/acme.sh`（gitee 镜像，GitHub 在这台机器不通），
+  签出来的文件在 `/etc/ssl/liangchao/{fullchain,privkey}.pem`。
+- 续期：`/usr/local/bin/liangchao-renew.sh`（cron 每天 04:17）。因为 alpn 验证要独占 443，
+  脚本会先停 nginx、续完再拉起来，停机 1-2 秒；没到期时 acme.sh 自己跳过。
+- 首次签发或换机器：`sudo bash deploy/issue-cert.sh`。
+
 ## 接口
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | 存活、RSS、Node 版本 |
-| POST | `/api/auth/login` | `{user,password}` → 种 `ld_sid` Cookie |
+| POST | `/api/auth/login` | `{account,password}` → 种 `ld_sid` Cookie（HTTPS 下带 `Secure`） |
 | POST | `/api/auth/logout` | 清会话 |
 | GET | `/api/auth/me` | 当前用户 |
 | GET | `/api/diary?order=new\|old` | 列表（解密后返回） |
