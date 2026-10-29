@@ -289,3 +289,14 @@ login_fails(lkey PRIMARY KEY, n, last, until)                 -- 服务端锁定
 - 注册链路暂时返回 503 `mail_unavailable`（SMTP 账号密码还没填），页面提示「邮件服务暂时发不出去，稍后再试或联系管理员」；
   注册失败时 pending 账号会回滚，实测服务器库里没有留下残号。
 - 还差一步：`sudo bash deploy/smtp-setup.sh 1373917993@qq.com <QQ邮箱SMTP授权码>`，然后注册页就能真发信。
+
+### 发信通道已接通（2026-10-29 21:5x）
+
+- 发信用的是小号邮箱 `liangchao_070626@qq.com`（不是站点主邮箱），`LD_MAIL_FROM` 与之相同，
+  发件人显示「我们的小站」。授权码写在 `/etc/liangchao.env` 的 `LD_SMTP_PASS`，权限 640 root:www-data。
+- 先用 `1373917993@qq.com` 试过，QQ 返回 `535 Login fail`——授权码和生成它的那个账号绑定，
+  换账号就对不上，只能用小号本身。
+- 直连 SMTP 发一封测试信 → `SEND OK`；`POST /api/auth/register` 真实调用 → 201 `pending`（不再 503），
+  说明邮件被 QQ 接受了；浏览器里走完注册页第一步，界面正常进到「填验证码」并开始 58 秒倒计时。
+- 测试用的待验证账号（`MailTest` / `MailTest2`）验证完即从库里删掉，邮箱不占用。
+- 未做：邮件进入垃圾箱的概率、QQ 对高频发信的限流，等有真实注册量再看。

@@ -62,6 +62,9 @@ sudo bash /srv/liangchao/app/deploy/smtp-setup.sh 1373917993@qq.com <授权码>
 脚本会改写 `/etc/liangchao.env` 里的 `LD_SMTP_*` 并重启服务。没配置时注册接口返回 503
 `mail_unavailable`，已有账号的登录不受影响。
 
+线上当前用的是小号邮箱 `liangchao_070626@qq.com` 发信（发件人显示「我们的小站」）。
+它只用来发验证码，不读信，授权码泄露了随时在 QQ 邮箱里吊销重生成。
+
 ## 部署（2 核 2G）
 
 ```powershell
