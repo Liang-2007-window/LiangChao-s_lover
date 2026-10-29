@@ -153,3 +153,26 @@ login_fails(lkey PRIMARY KEY, n, last, until)                 -- 服务端锁定
 2. **DATA_KEY 丢失 = 日记永久打不开**：密钥要另存一份（密码管理器/本地文件），并随备份一起保存。
 3. **GitHub 推送凭证**：本机凭据在沙箱里可能读不到，push 时可能要你确认一次。
 4. **服务器是否已跑着别的站**：停 MySQL/PHP 前要确认没有别的站点依赖它们。
+
+---
+
+## 10. 实际落地（2026-10-29，与上文计划的差异）
+
+上线后这一节才是准的，上面几节保留当时的推演过程。
+
+| 项目 | 计划 | 实际 | 为什么改 |
+| --- | --- | --- | --- |
+| 框架 | Fastify + 依赖 | `node:http` + `node:sqlite`，零 npm 依赖 | 2C2G 上每装一个包都是磁盘、内存和攻击面；Node 24 自带 SQLite 够用 |
+| 进程管理 | pm2 | systemd 单元 `liangchao.service` | systemd 自带 `MemoryMax=320M`、`Restart=always`、日志进 journald，省一个常驻进程 |
+| 日记字段 | date/title/weather/mood 明文 + 正文密文 | **整条载荷一起加密**（`server/entry.mjs`） | 标题同样隐私，明细列没有查询需求，多一次 AES 解密可以忽略 |
+| 登录字段 | `{user, pass}` | `{account, password}` | 便于和账号名区分 |
+| 路由 | 无 health | 多了 `GET /api/health`（RSS/uptime/Node 版本）与 `PATCH /api/diary/:id` | 部署自检与轻量更新 |
+| 站点根目录 | `/www/wwwroot/...` | `/srv/liangchao/app`，Nginx `root` 指它，`/server/ /tests/ /deploy/ /docs/` 显式 404 | 一个目录即整站，反过来也能挡住源码和后端代码被下载 |
+| 音频 | 转 96 kbps 单声道省 1 MB | **保留原 128 kbps 立体声** | 实测转换只省 25%（1.63 MB → 1.22 MB），背景音乐是这站的情绪内核，不值得为 400 KB 掉质感；已经 `preload="none"`，不点不下载 |
+
+实测（Ubuntu 22.04.5、2 vCPU、1736 MB）：
+
+- 系统已用 280 MB（宝塔 71 MB、云盾监控 60 MB、Node 62 MB），可用 1.27 GB；停掉 snapd / multipathd 又省约 50 MB。
+- 800 次请求（并发 10，含 200 次 `/api/health`）：全部 200，p95 ≈ 170 ms（主要是到杭州的公网 RTT），Node RSS 63 → 66 MB，无泄漏迹象。
+- gzip 生效（style.css 35 KB → 约 7 KB），html `no-cache`，js/css 1 小时，媒体 30 天。
+- 备份脚本已跑通：`/var/backups/liangchao/` 下同时有 db 与 `env-*.txt`（含 LD_DATA_KEY），每日 03:20 由 `/etc/cron.d/liangchao-backup` 触发，校验 `integrity_check` 并留 7 天。
