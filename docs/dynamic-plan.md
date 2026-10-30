@@ -438,7 +438,10 @@ CREATE INDEX plaza_account ON plaza(account_id, id DESC);
 ### 怎么「调整大小」
 
 - 去掉 SVG 根节点写死的 `width="1920" height="1080"`，交给 CSS `width/height:100%`；
-- SVG 自带 `preserveAspectRatio="xMidYMid slice"`，于是**等比裁切**铺满，手机竖屏也不会压扁；
+- SVG 自带 `preserveAspectRatio="xMinYMid slice"`，于是**等比裁切**铺满，手机竖屏也不会压扁；
+- 锚点从 `xMid` 改成 `xMin` 是用户要求的：竖屏 390×844 时 slice 会把 16:9 素材横向裁到
+  **499/1920 ≈ 26%**，居中裁直接切掉左半边的主体，改 xMin 后从最左边开始裁
+  （实测左边界 art x=0，右边界 art x=499）。桌面 16:9 窗口几乎不横向裁剪，所以不影响电脑上的效果；
 - `position:fixed; inset:0` 而不是塞进文档流——纸页内容很长，塞进流里会跟着滚。
 
 ### 怎么「调整不透明度」

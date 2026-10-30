@@ -94,13 +94,15 @@ sudo bash /srv/liangchao/app/deploy/smtp-setup.sh 1373917993@qq.com <授权码>
 - 注入：`js/page-bg.js` 读 SVG 后 **内联**进 `<div class="page-bg" data-page-bg>`。
   用 `background-image` 或 `<img>` 引进来动画是停的——SVG 作为图片文档不跑 CSS 动画。
 - 尺寸：SVG 的 `width/height` 被去掉，交给 CSS `width/height:100%`，靠文件自带的
-  `preserveAspectRatio="xMidYMid slice"` 自动铺满（等比裁切，不变形）。
+  `preserveAspectRatio="xMinYMid slice"` 自动铺满（等比裁切，不变形；竖屏从**最左边**开始裁，
+  居中裁会把主体切掉）。竖屏一屏只能看到 16:9 素材左侧约 1/4 宽的画面，这是 slice 的固有代价。
 - 浓淡：`css/theme.css` 的 `--bg-opacity`（默认 `.62`，窄屏 `--bg-opacity-narrow`）。
   再配一层径向遮罩，中间文字区保持纸色，只在四周露出来——不然深色夜空会把正文对比度压垮。
 - 首页（问答 + 登录）**没有**这一层，保持原样。
 - 想关掉某个页面：删掉该页的 `<div class="page-bg" …>` 和 `js/page-bg.js` 两行即可。
 - 换图注意：SVG 内联后 id 会进主文档，必须加前缀（现有素材已改成 `hb-` 前缀，
-  `index.html` 里就有一个 `id="cloud"`）；nginx 给 svg 设了 30 天缓存，换图要改文件名或加 `?v=2`。
+  `index.html` 里就有一个 `id="cloud"`）；nginx 给 svg 设了 30 天 immutable，
+  换图时必须把 `js/page-bg.js` 里默认地址的 `?v=N` 加一，否则手机不会重新拉。
 
 ## 广场
 
