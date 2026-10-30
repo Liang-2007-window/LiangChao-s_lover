@@ -7,7 +7,8 @@
   var host = document.querySelector('[data-page-bg]');
   if (!host) return;
 
-  var src = host.getAttribute('data-src') || 'images/halloween-bg.svg';
+  // 换了素材就改这里的版本号：nginx 给 svg 设了 30 天 immutable，不加参数手机不会重新拉
+  var src = host.getAttribute('data-src') || 'images/halloween-bg.svg?v=2';
 
   function show(markup) {
     host.innerHTML = markup;

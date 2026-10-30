@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMinYMid slice">
   <title>Halloween Background v5</title>
   <style>
     .fl{transform-box:fill-box;transform-origin:center;animation-duration:var(--dur,5s);animation-delay:var(--delay,0s);animation-timing-function:ease-in-out;animation-iteration-count:infinite}
