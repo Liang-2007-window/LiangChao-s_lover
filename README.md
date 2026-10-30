@@ -11,6 +11,8 @@ index.html / diary.html      两个主页面
 plaza.html                   广场：登录账号共用的留言墙
 register.html / forgot.html / settings.html   注册、找回密码、账号设置
 css/ js/ images/ audio/ fonts/   静态资源（Nginx 直接发）
+css/theme.css                 万圣节背景层（只影响日记/广场/账号这几张纸页）
+js/page-bg.js                 把 images/halloween-bg.svg 内联进页面（背景图里的动画才会跑）
 server/                      后端：node:http + node:sqlite，零 npm 依赖
   index.mjs                  路由、会话、限流、请求日志
   db.mjs                     建表与预编译语句
@@ -83,6 +85,22 @@ sudo bash /srv/liangchao/app/deploy/smtp-setup.sh 1373917993@qq.com <授权码>
    收不到就是收件方丢了（垃圾箱、拦截规则、地址写错），不是服务端问题。
 3. 服务日志里有 `[mail] sent purpose=... to=域名` 和 `[mail] failed ... err=...`，
    区分「我们发了」和「我们没发」。日志不记验证码本身。
+
+## 页面背景（万圣节）
+
+日记、广场、注册、找回密码、账号设置这几张“纸页”背后铺了一层万圣节夜景。
+
+- 素材：`images/halloween-bg.svg`（1920×1080，自带幽灵/蝙蝠浮动动画）。
+- 注入：`js/page-bg.js` 读 SVG 后 **内联**进 `<div class="page-bg" data-page-bg>`。
+  用 `background-image` 或 `<img>` 引进来动画是停的——SVG 作为图片文档不跑 CSS 动画。
+- 尺寸：SVG 的 `width/height` 被去掉，交给 CSS `width/height:100%`，靠文件自带的
+  `preserveAspectRatio="xMidYMid slice"` 自动铺满（等比裁切，不变形）。
+- 浓淡：`css/theme.css` 的 `--bg-opacity`（默认 `.62`，窄屏 `--bg-opacity-narrow`）。
+  再配一层径向遮罩，中间文字区保持纸色，只在四周露出来——不然深色夜空会把正文对比度压垮。
+- 首页（问答 + 登录）**没有**这一层，保持原样。
+- 想关掉某个页面：删掉该页的 `<div class="page-bg" …>` 和 `js/page-bg.js` 两行即可。
+- 换图注意：SVG 内联后 id 会进主文档，必须加前缀（现有素材已改成 `hb-` 前缀，
+  `index.html` 里就有一个 `id="cloud"`）；nginx 给 svg 设了 30 天缓存，换图要改文件名或加 `?v=2`。
 
 ## 广场
 

@@ -1,0 +1,56 @@
+/* 万圣节夜景背景层
+   纯装饰：铺满视口、垫在内容下面（在纸张质感层之下），
+   靠 --bg-opacity 控制存在感，靠 mask 让中间的文字区保持纸色、只在四周露出来。
+
+   为什么由 js/page-bg.js 注入而不是 CSS background-image：
+   背景图里的幽灵/蝙蝠浮动动画只在“内联进文档”时才会跑。 */
+
+.page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+  /* 中间留给字，四周才露出夜色 */
+  -webkit-mask-image: radial-gradient(120% 78% at 50% 46%,
+      rgba(0, 0, 0, 0) 0 30%, rgba(0, 0, 0, .35) 52%, rgba(0, 0, 0, .85) 76%, #000 100%);
+  mask-image: radial-gradient(120% 78% at 50% 46%,
+      rgba(0, 0, 0, 0) 0 30%, rgba(0, 0, 0, .35) 52%, rgba(0, 0, 0, .85) 76%, #000 100%);
+}
+
+.page-bg.is-ready { opacity: var(--bg-opacity, .62); }
+
+.page-bg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 首页黄昏场景：放在照片之上、暖光与暗角之下，
+   用 screen 混合，让月亮和南瓜灯透出来而不是把照片压黑。 */
+.page-bg--scene {
+  position: absolute;
+  z-index: 1;
+  mix-blend-mode: screen;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.page-bg--scene.is-ready { opacity: var(--bg-opacity-scene, .7); }
+
+/* 窄屏：字占满整屏，把图层再收一点，别和正文抢注意力 */
+@media (max-width: 760px) {
+  .page-bg {
+    -webkit-mask-image: radial-gradient(150% 90% at 50% 42%,
+        rgba(0, 0, 0, 0) 0 42%, rgba(0, 0, 0, .5) 70%, #000 100%);
+    mask-image: radial-gradient(150% 90% at 50% 42%,
+        rgba(0, 0, 0, 0) 0 42%, rgba(0, 0, 0, .5) 70%, #000 100%);
+  }
+  .page-bg.is-ready { opacity: var(--bg-opacity-narrow, .5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-bg { transition: none; }
+}

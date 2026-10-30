@@ -1,0 +1,346 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+  <title>Halloween Background v5</title>
+  <style>
+    .fl{transform-box:fill-box;transform-origin:center;animation-duration:var(--dur,5s);animation-delay:var(--delay,0s);animation-timing-function:ease-in-out;animation-iteration-count:infinite}
+    .fl-ghost{animation-name:fl-ghost}
+    .fl-bat{animation-name:fl-bat}
+    @keyframes fl-ghost{0%,100%{transform:translateY(0) rotate(-1.5deg)}50%{transform:translateY(calc(var(--amp,10px) * -1)) rotate(1.5deg)}}
+    @keyframes fl-bat{0%,100%{transform:translate(0,0) rotate(-2deg)}50%{transform:translate(var(--dx,8px),calc(var(--amp,10px) * -1)) rotate(2deg)}}
+    @media (prefers-reduced-motion:reduce){.fl{animation-name:none}}
+  </style>
+  <defs>
+    <!-- gradients -->
+    <linearGradient id="hb-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e0724"/>
+      <stop offset=".45" stop-color="#2a1255"/>
+      <stop offset=".8" stop-color="#6a2b82"/>
+      <stop offset="1" stop-color="#b3507a"/>
+    </linearGradient>
+    <radialGradient id="hb-moonGlow">
+      <stop offset="0" stop-color="#ffd98a" stop-opacity=".6"/>
+      <stop offset=".5" stop-color="#ffa64d" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#ffa64d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="hb-moonBody" cx=".4" cy=".35" r=".75">
+      <stop offset="0" stop-color="#fff8dc"/>
+      <stop offset="1" stop-color="#ffd27a"/>
+    </radialGradient>
+    <radialGradient id="hb-pg" cx=".5" cy=".4" r=".7">
+      <stop offset="0" stop-color="#ffc064"/>
+      <stop offset=".55" stop-color="#ff8f1f"/>
+      <stop offset="1" stop-color="#e0600a"/>
+    </radialGradient>
+    <linearGradient id="hb-gg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c9d4ff"/>
+    </linearGradient>
+    <linearGradient id="hb-fog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb3e0" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#ffb3e0" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#ffb3e0" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="hb-vignette" cx=".5" cy=".5" r=".75">
+      <stop offset=".6" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".4"/>
+    </radialGradient>
+
+    <!-- filters -->
+    <filter id="hb-blur3" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="hb-blur6" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="hb-blur8" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+    <filter id="hb-blur20" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="20"/></filter>
+
+    <!-- sparkle -->
+    <path id="hb-spark" d="M0 -12 Q2 -2 12 0 Q2 2 0 12 Q-2 2 -12 0 Q-2 -2 0 -12 Z"/>
+
+    <!-- puffy cloud -->
+    <g id="hb-cloud">
+      <circle cx="0" cy="0" r="36"/>
+      <circle cx="48" cy="-14" r="48"/>
+      <circle cx="108" cy="-2" r="40"/>
+      <circle cx="150" cy="8" r="28"/>
+      <rect x="-20" y="4" width="190" height="32" rx="16"/>
+    </g>
+
+    <!-- chubby bat -->
+    <g id="hb-bat">
+      <g fill="#3d1c70" stroke="#3d1c70" stroke-width="5" stroke-linejoin="round">
+        <path d="M46 30 C38 14 16 10 4 26 C12 24 17 28 15 37 C21 33 27 35 28 43 C34 39 41 41 46 47 Z"/>
+        <path d="M74 30 C82 14 104 10 116 26 C108 24 103 28 105 37 C99 33 93 35 92 43 C86 39 79 41 74 47 Z"/>
+      </g>
+      <path d="M45 24 L43 8 C50 10 55 14 57 20 Z M75 24 L77 8 C70 10 65 14 63 20 Z" fill="#5a2aa0" stroke="#5a2aa0" stroke-width="4" stroke-linejoin="round"/>
+      <ellipse cx="60" cy="38" rx="19" ry="21" fill="#5a2aa0"/>
+      <circle cx="52" cy="35" r="5" fill="#fff"/>
+      <circle cx="68" cy="35" r="5" fill="#fff"/>
+      <circle cx="53" cy="36" r="2.4" fill="#2a1450"/>
+      <circle cx="67" cy="36" r="2.4" fill="#2a1450"/>
+      <polygon points="55.5,46.5 59,46.5 57,52" fill="#fff"/>
+      <polygon points="61,46.5 64.5,46.5 62.5,52" fill="#fff"/>
+    </g>
+
+    <!-- cute ghost -->
+    <g id="hb-ghost">
+      <ellipse cx="50" cy="62" rx="68" ry="80" fill="#cfd8ff" opacity=".28" filter="url(#hb-blur8)"/>
+      <ellipse cx="8" cy="68" rx="11" ry="8" transform="rotate(-30 8 68)" fill="url(#hb-gg)"/>
+      <ellipse cx="92" cy="68" rx="11" ry="8" transform="rotate(30 92 68)" fill="url(#hb-gg)"/>
+      <path d="M50 6 C24 6 10 28 10 54 L10 98 C10 110 20 112 26 105 C31 98 38 98 42 105 C46 112 54 112 58 105 C62 98 69 98 74 105 C80 112 90 110 90 98 L90 54 C90 28 76 6 50 6 Z" fill="url(#hb-gg)"/>
+      <ellipse cx="36" cy="46" rx="6.5" ry="9" fill="#2a1450"/>
+      <ellipse cx="64" cy="46" rx="6.5" ry="9" fill="#2a1450"/>
+      <circle cx="38" cy="42" r="2.6" fill="#fff"/>
+      <circle cx="66" cy="42" r="2.6" fill="#fff"/>
+      <ellipse cx="24" cy="60" rx="7" ry="4.5" fill="#ff8fb3" opacity=".75"/>
+      <ellipse cx="76" cy="60" rx="7" ry="4.5" fill="#ff8fb3" opacity=".75"/>
+      <ellipse cx="50" cy="62" rx="5.5" ry="7" fill="#2a1450"/>
+    </g>
+
+    <!-- jack-o-lantern face (rounded via thick round-join stroke) -->
+    <g id="hb-pf" fill="#ffe066" stroke="#ffe066" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+      <polygon points="-38,-4 -18,-4 -28,-24"/>
+      <polygon points="18,-4 38,-4 28,-24"/>
+      <polygon points="-5,10 5,10 0,2"/>
+      <path d="M-36 20 C-26 46 26 46 36 20 C16 28 -16 28 -36 20 Z"/>
+    </g>
+
+    <!-- pumpkin body -->
+    <g id="hb-pb">
+      <ellipse cx="0" cy="6" rx="86" ry="62" fill="#c24f08"/>
+      <ellipse cx="-46" cy="0" rx="46" ry="58" fill="url(#hb-pg)"/>
+      <ellipse cx="46" cy="0" rx="46" ry="58" fill="url(#hb-pg)"/>
+      <ellipse cx="-24" cy="0" rx="46" ry="62" fill="url(#hb-pg)"/>
+      <ellipse cx="24" cy="0" rx="46" ry="62" fill="url(#hb-pg)"/>
+      <ellipse cx="0" cy="0" rx="40" ry="64" fill="url(#hb-pg)"/>
+      <g fill="none" stroke="#b34a05" stroke-width="3.5" opacity=".4" stroke-linecap="round">
+        <path d="M-24 -58 C-40 -22 -40 22 -24 58"/>
+        <path d="M24 -58 C40 -22 40 22 24 58"/>
+        <path d="M-50 -48 C-74 -18 -74 18 -50 48"/>
+        <path d="M50 -48 C74 -18 74 18 50 48"/>
+      </g>
+      <ellipse cx="-52" cy="-30" rx="14" ry="8" transform="rotate(-35 -52 -30)" fill="#fff" opacity=".3"/>
+      <path d="M10 -66 C22 -90 46 -90 52 -78 C42 -68 26 -62 10 -66 Z" fill="#6fae2c"/>
+      <path d="M0 -60 C-2 -78 6 -88 16 -92" stroke="#5a7a22" stroke-width="14" fill="none" stroke-linecap="round"/>
+      <path d="M14 -74 C34 -80 44 -66 34 -58 C28 -54 24 -62 30 -64" stroke="#7fbf33" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- candy corn -->
+    <g id="hb-candycorn" stroke-width="5" stroke-linejoin="round">
+      <polygon points="6.7,40 33.3,40 40,60 0,60" fill="#ffd23f" stroke="#ffd23f"/>
+      <polygon points="13.3,20 26.7,20 33.3,40 6.7,40" fill="#ff8c1a" stroke="#ff8c1a"/>
+      <polygon points="20,4 26.7,20 13.3,20" fill="#fff4e0" stroke="#fff4e0"/>
+    </g>
+
+    <!-- wrapped candy -->
+    <g id="hb-wrapped" stroke="#ff5e8a" stroke-width="6" stroke-linejoin="round">
+      <polygon points="-22,0 -40,-12 -40,12" fill="#ff5e8a"/>
+      <polygon points="22,0 40,-12 40,12" fill="#ff5e8a"/>
+      <ellipse cx="0" cy="0" rx="26" ry="16" fill="#ff5e8a" stroke="none"/>
+      <path d="M-10 -14 L-4 14 M2 -15 L8 15 M14 -12 L18 11" stroke="#fff" stroke-width="3.5" opacity=".85" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- chubby spider -->
+    <g id="hb-spider">
+      <g stroke="#5b3a9a" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M-10 0 C-24 -14 -34 -10 -38 2 M-11 5 C-26 4 -36 12 -38 24 M-9 10 C-20 14 -28 24 -28 36"/>
+        <path d="M10 0 C24 -14 34 -10 38 2 M11 5 C26 4 36 12 38 24 M9 10 C20 14 28 24 28 36"/>
+      </g>
+      <circle cx="0" cy="8" r="16" fill="#5b3a9a"/>
+      <circle cx="0" cy="-10" r="12" fill="#6e48b8"/>
+      <circle cx="-5" cy="-12" r="4.2" fill="#fff"/>
+      <circle cx="5" cy="-12" r="4.2" fill="#fff"/>
+      <circle cx="-5" cy="-11.5" r="2" fill="#1a0b36"/>
+      <circle cx="5" cy="-11.5" r="2" fill="#1a0b36"/>
+      <path d="M-4 -5 Q0 -2 4 -5" stroke="#1a0b36" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- web (top-left quarter) -->
+    <path id="hb-ring" d="M100 0 Q88.9 14 95.1 30.9 Q80.2 40.9 80.9 58.8 Q63.6 63.6 58.8 80.9 Q40.9 80.2 30.9 95.1 Q14 88.9 0 100" fill="none" vector-effect="non-scaling-stroke"/>
+    <g id="hb-web" stroke="#e4e8ff" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-opacity=".4">
+      <path d="M0 0 L400 0 M0 0 L380.4 123.6 M0 0 L323.6 235.1 M0 0 L235.1 323.6 M0 0 L123.6 380.4 M0 0 L0 400"/>
+      <use xlink:href="#hb-ring"/>
+      <use xlink:href="#hb-ring" transform="scale(1.9)"/>
+      <use xlink:href="#hb-ring" transform="scale(2.8)"/>
+      <use xlink:href="#hb-ring" transform="scale(3.7)"/>
+    </g>
+
+    <!-- tombstone with sleepy face -->
+    <g id="hb-stone">
+      <path d="M-30 0 L-30 -60 C-30 -100 30 -100 30 -60 L30 0 Z" fill="#3a2070" stroke="#5a3a9a" stroke-width="5" stroke-linejoin="round"/>
+      <g stroke="#9a78e0" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M-15 -58 Q-10 -53 -5 -58 M5 -58 Q10 -53 15 -58"/>
+        <path d="M-5 -42 Q0 -37 5 -42"/>
+      </g>
+    </g>
+
+    <!-- haunted house -->
+    <g id="hb-winArch">
+      <path d="M-14 22 L-14 -8 C-14 -28 14 -28 14 -8 L14 22 Z"/>
+    </g>
+    <g id="hb-house">
+      <g fill="#1a0b36" stroke="#1a0b36" stroke-linejoin="round" stroke-width="14">
+        <rect x="7" y="-143" width="166" height="136" rx="10"/>
+        <polygon points="-5,-150 90,-222 185,-150"/>
+        <rect x="-53" y="-208" width="46" height="200" rx="10"/>
+        <polygon points="-62,-215 -30,-295 2,-215"/>
+        <rect x="139" y="-218" width="8" height="46" rx="4"/>
+      </g>
+      <g id="hb-houseWin" fill="#ffc94a">
+        <use xlink:href="#hb-winArch" transform="translate(40 -90)"/>
+        <use xlink:href="#hb-winArch" transform="translate(140 -90)"/>
+        <use xlink:href="#hb-winArch" transform="translate(-30 -160) scale(.8)"/>
+        <use xlink:href="#hb-winArch" transform="translate(-30 -90) scale(.8)"/>
+        <circle cx="90" cy="-182" r="13"/>
+        <path d="M72 0 L72 -38 C72 -64 108 -64 108 -38 L108 0 Z" fill="#ff9a2a"/>
+      </g>
+      <use xlink:href="#hb-houseWin" filter="url(#hb-blur8)" opacity=".7"/>
+      <path stroke="#1a0b36" stroke-width="4" fill="none" d="M40 -112 V-68 M24 -86 H56 M140 -112 V-68 M124 -86 H156"/>
+    </g>
+  </defs>
+
+  <!-- sky -->
+  <rect width="1920" height="1080" fill="url(#hb-sky)"/>
+
+  <!-- stars and sparkles -->
+  <g fill="#fff">
+    <circle cx="150" cy="90" r="2.4" opacity=".8"/><circle cx="420" cy="60" r="2.8" opacity=".9"/>
+    <circle cx="560" cy="190" r="2" opacity=".6"/><circle cx="880" cy="50" r="2.4" opacity=".7"/>
+    <circle cx="1100" cy="90" r="3" opacity=".9"/><circle cx="1250" cy="40" r="2.2" opacity=".8"/>
+    <circle cx="1800" cy="100" r="2.6" opacity=".8"/><circle cx="1860" cy="260" r="2" opacity=".6"/>
+    <circle cx="70" cy="300" r="2" opacity=".6"/><circle cx="960" cy="230" r="2" opacity=".5"/>
+  </g>
+  <g fill="#fff3b0">
+    <use xlink:href="#hb-spark" transform="translate(540 90) scale(1.4)" opacity=".9"/>
+    <use xlink:href="#hb-spark" transform="translate(1110 470) scale(1.1)" opacity=".85"/>
+    <use xlink:href="#hb-spark" transform="translate(1780 330) scale(1.6)" opacity=".9"/>
+    <use xlink:href="#hb-spark" transform="translate(300 420) scale(1)" opacity=".8"/>
+    <use xlink:href="#hb-spark" transform="translate(850 170) scale(1.2)" opacity=".85"/>
+    <use xlink:href="#hb-spark" transform="translate(1600 80) scale(1)" opacity=".8"/>
+  </g>
+
+  <!-- moon -->
+  <circle cx="1440" cy="260" r="420" fill="url(#hb-moonGlow)"/>
+  <circle cx="1440" cy="260" r="170" fill="url(#hb-moonBody)"/>
+  <g fill="#e8b455" opacity=".35">
+    <circle cx="1395" cy="215" r="28"/><circle cx="1490" cy="305" r="38"/>
+    <circle cx="1505" cy="205" r="18"/><circle cx="1390" cy="315" r="16"/>
+  </g>
+
+  <!-- puffy clouds -->
+  <g fill="#4a2a80" opacity=".55">
+    <use xlink:href="#hb-cloud" transform="translate(1230 400) scale(1.7)"/>
+    <use xlink:href="#hb-cloud" transform="translate(120 200) scale(1.3)"/>
+    <use xlink:href="#hb-cloud" transform="translate(780 90) scale(1)"/>
+  </g>
+
+  <!-- distant hill -->
+  <path d="M0 860 C300 780 600 830 900 800 C1200 770 1500 840 1920 790 L1920 1080 L0 1080 Z" fill="#3a1a66"/>
+
+  <!-- haunted house -->
+  <g transform="translate(300 800) rotate(-2) scale(1.5)">
+    <use xlink:href="#hb-house"/>
+  </g>
+
+  <!-- main hill -->
+  <path d="M0 1080 L0 830 C150 760 450 740 650 810 C850 880 1000 840 1250 830 C1500 820 1700 780 1920 840 L1920 1080 Z" fill="#1f0f42"/>
+
+  <!-- chunky dead tree -->
+  <g stroke="#1a0b36" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1760 900 C1745 820 1775 760 1745 690 C1730 650 1740 610 1760 570" stroke-width="54"/>
+    <path d="M1750 700 C1700 670 1650 660 1600 610" stroke-width="30"/>
+    <path d="M1600 610 C1578 588 1570 566 1550 546" stroke-width="16"/>
+    <path d="M1598 612 C1570 622 1545 618 1515 632" stroke-width="14"/>
+    <path d="M1752 650 C1800 620 1850 610 1890 560" stroke-width="30"/>
+    <path d="M1890 560 C1908 540 1912 520 1905 500" stroke-width="14"/>
+    <path d="M1850 592 C1870 604 1890 604 1905 620" stroke-width="12"/>
+    <path d="M1760 575 C1735 535 1715 515 1705 470" stroke-width="22"/>
+    <path d="M1705 470 C1695 445 1700 425 1688 410" stroke-width="10"/>
+    <path d="M1762 570 C1785 530 1800 505 1805 460" stroke-width="18"/>
+  </g>
+
+  <!-- tombstones -->
+  <use xlink:href="#hb-stone" transform="translate(690 905) scale(1.5)"/>
+  <use xlink:href="#hb-stone" transform="translate(800 935) scale(1)"/>
+  <use xlink:href="#hb-stone" transform="translate(1500 905) scale(1.5)"/>
+  <use xlink:href="#hb-stone" transform="translate(1600 935) scale(1)"/>
+
+  <!-- ground fog -->
+  <rect x="0" y="770" width="1920" height="200" fill="url(#hb-fog)"/>
+
+  <!-- floating pumpkin shadow -->
+  <ellipse cx="1300" cy="905" rx="130" ry="18" fill="#000" opacity=".3" filter="url(#hb-blur6)"/>
+
+  <!-- ghosts -->
+  <g opacity=".95">
+    <g class="fl fl-ghost" style="--amp:12px;--dur:5.5s;--delay:0s"><use xlink:href="#hb-ghost" transform="translate(740 350) rotate(-10) scale(2) translate(-50 -60)"/></g>
+    <g class="fl fl-ghost" style="--amp:10px;--dur:6.5s;--delay:-2s"><use xlink:href="#hb-ghost" transform="translate(960 640) rotate(12) scale(1.5) translate(-50 -60)"/></g>
+    <g class="fl fl-ghost" style="--amp:8px;--dur:4.8s;--delay:-1s"><use xlink:href="#hb-ghost" transform="translate(1190 130) rotate(10) scale(.75) translate(-50 -60)"/></g>
+    <g class="fl fl-ghost" style="--amp:9px;--dur:6s;--delay:-3.5s"><use xlink:href="#hb-ghost" transform="translate(100 480) rotate(-8) scale(1.1) translate(-50 -60)"/></g>
+  </g>
+
+  <!-- floating pumpkins -->
+  <!-- A: big, front facing, tilted -->
+  <ellipse cx="1300" cy="640" rx="260" ry="200" fill="#ff8a1f" opacity=".25" filter="url(#hb-blur20)"/>
+  <g transform="translate(1300 640) rotate(-12) scale(1.9)">
+    <use xlink:href="#hb-pb"/>
+    <use xlink:href="#hb-pf" filter="url(#hb-blur6)" opacity=".9"/>
+    <use xlink:href="#hb-pf"/>
+  </g>
+  <!-- B: three-quarter view, face turned left -->
+  <ellipse cx="1050" cy="330" rx="190" ry="150" fill="#ff8a1f" opacity=".22" filter="url(#hb-blur20)"/>
+  <g transform="translate(1050 330) rotate(14) scale(1.2)">
+    <g transform="scale(.9 1)"><use xlink:href="#hb-pb"/></g>
+    <ellipse cx="52" cy="-10" rx="18" ry="30" fill="#ffc46b" opacity=".35"/>
+    <g transform="translate(-24 6) scale(.62 1)">
+      <use xlink:href="#hb-pf" filter="url(#hb-blur6)" opacity=".9"/>
+      <use xlink:href="#hb-pf"/>
+    </g>
+  </g>
+
+  <!-- bats -->
+  <g>
+    <g class="fl fl-bat" style="--amp:10px;--dur:4.4s;--delay:0s;--dx:10px"><use xlink:href="#hb-bat" transform="translate(1380 230) rotate(-10) scale(1.8) translate(-60 -30)"/></g>
+    <g class="fl fl-bat" style="--amp:8px;--dur:3.8s;--delay:-1.2s;--dx:-8px"><use xlink:href="#hb-bat" transform="translate(1000 110) rotate(8) scale(1.1) translate(-60 -30)"/></g>
+    <g class="fl fl-bat" style="--amp:11px;--dur:4.8s;--delay:-2.4s;--dx:9px"><use xlink:href="#hb-bat" transform="translate(330 130) rotate(-12) scale(1.3) translate(-60 -30)"/></g>
+    <g class="fl fl-bat" style="--amp:9px;--dur:4.0s;--delay:-0.6s;--dx:-10px"><use xlink:href="#hb-bat" transform="translate(780 600) rotate(-10) scale(1.1) translate(-60 -30)"/></g>
+    <g class="fl fl-bat" style="--amp:8px;--dur:3.6s;--delay:-1.8s;--dx:8px"><use xlink:href="#hb-bat" transform="translate(1520 520) rotate(12) scale(1) translate(-60 -30)"/></g>
+  </g>
+
+  <!-- webs and spiders -->
+  <use xlink:href="#hb-web"/>
+  <use xlink:href="#hb-web" transform="translate(1920 0) scale(-1 1)"/>
+  <g stroke="#e4e8ff" stroke-width="1.6" opacity=".5">
+    <line x1="260" y1="0" x2="260" y2="215"/>
+    <line x1="1700" y1="0" x2="1700" y2="180"/>
+  </g>
+  <use xlink:href="#hb-spider" transform="translate(260 235) scale(1.5)"/>
+  <use xlink:href="#hb-spider" transform="translate(1700 205) scale(1.8)"/>
+
+  <!-- foreground hill -->
+  <path d="M0 1080 L0 990 C300 940 700 1000 1000 975 C1300 950 1600 1000 1920 960 L1920 1080 Z" fill="#140730"/>
+  <path d="M0 990 C300 940 700 1000 1000 975 C1300 950 1600 1000 1920 960" fill="none" stroke="#5a2f94" stroke-width="3" opacity=".5"/>
+
+  <!-- D: pumpkin lying on its side -->
+  <ellipse cx="250" cy="1052" rx="140" ry="14" fill="#000" opacity=".35" filter="url(#hb-blur6)"/>
+  <ellipse cx="240" cy="965" rx="220" ry="150" fill="#ff8a1f" opacity=".22" filter="url(#hb-blur20)"/>
+  <g transform="translate(240 965) rotate(80) scale(1.15)">
+    <use xlink:href="#hb-pb"/>
+    <use xlink:href="#hb-pf" filter="url(#hb-blur6)" opacity=".9"/>
+    <use xlink:href="#hb-pf"/>
+  </g>
+
+  <!-- candy -->
+  <use xlink:href="#hb-candycorn" transform="translate(1000 990) rotate(-25) scale(1.8)"/>
+  <use xlink:href="#hb-wrapped" transform="translate(1540 975) rotate(15) scale(1.8)"/>
+  <use xlink:href="#hb-candycorn" transform="translate(1830 975) rotate(20) scale(1.6)"/>
+  <use xlink:href="#hb-wrapped" transform="translate(500 1020) rotate(-10) scale(1.6)"/>
+
+  <!-- fireflies -->
+  <g fill="#ffc15e" filter="url(#hb-blur3)" opacity=".8">
+    <circle cx="150" cy="700" r="6"/><circle cx="620" cy="760" r="5"/>
+    <circle cx="880" cy="900" r="6"/><circle cx="1120" cy="780" r="5"/>
+    <circle cx="1450" cy="720" r="6"/><circle cx="1650" cy="830" r="5"/>
+    <circle cx="1860" cy="760" r="6"/><circle cx="420" cy="930" r="5"/>
+    <circle cx="1200" cy="930" r="5"/><circle cx="1400" cy="440" r="5"/>
+  </g>
+
+  <!-- vignette -->
+  <rect width="1920" height="1080" fill="url(#hb-vignette)"/>
+</svg>

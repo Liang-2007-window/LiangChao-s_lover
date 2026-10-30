@@ -421,3 +421,44 @@ CREATE INDEX plaza_account ON plaza(account_id, id DESC);
 - 没有网页端的「导出我的日记」按钮。要做的话得先想清楚限流与体积（单人 5 MB 上限已经存在），
   以及导出期间的内存占用（一次全解出来再写文件，2C2G 上 5 MB 没问题，但别做成流式循环之外的放大）。
 - 导出没有审计日志，只在 shell 历史里。真要多账号运营时应该记一行。
+
+## 16. 万圣节背景：给「纸页」加一层夜色
+
+需求只有一句「换成网站背景，适当调整大小和不透明度」，实际要解决三件事：
+
+### 为什么不直接 background-image
+
+素材是带 CSS 动画的 SVG（幽灵飘、蝙蝠扇翅）。SVG 一旦作为 `<img>` 或 `background-image`
+加载，就变成「独立文档」渲染，**文档内的 CSS 动画不跑**。所以 `js/page-bg.js` 用 `fetch`
+取回源码再 `innerHTML` 内联进 `<div class="page-bg" data-page-bg>`，SVG 才和主文档同属一棵树。
+
+代价是 id 会进主文档：素材里 26 个 id 全部加了 `hb-` 前缀，否则会和 `index.html` 已有的
+`id="cloud"` 撞车（内联后同一个文档里 id 必须唯一，撞了 CSS 选择器会串）。
+
+### 怎么「调整大小」
+
+- 去掉 SVG 根节点写死的 `width="1920" height="1080"`，交给 CSS `width/height:100%`；
+- SVG 自带 `preserveAspectRatio="xMidYMid slice"`，于是**等比裁切**铺满，手机竖屏也不会压扁；
+- `position:fixed; inset:0` 而不是塞进文档流——纸页内容很长，塞进流里会跟着滚。
+
+### 怎么「调整不透明度」
+
+直接压低整体 opacity 会让中间正文一起发灰，所以是两层：
+
+1. `--bg-opacity`（默认 `.62`，窄屏 `.5`）控制整层浓淡；
+2. 叠一层径向 `mask-image`，中间近乎透明、四周才露夜色——正文区保住纸色（实测正文 luma 241，
+   纯纸 246），页边降到 132–211。
+
+`z-index:-2` 是刻意的：`diary.css` 里 `body::before` 是纸张颗粒层（`z-index:-1`），背景要压在它下面，
+颗粒才盖得住夜色，不至于看起来像贴在玻璃上。
+
+### 范围
+
+只给「纸页」加：日记、广场、注册、找回密码、账号设置。首页（问答 + 登录）用户明确说不要动，
+所以 `index.html` 与改动前完全一致（`git diff -- index.html` 为空）。
+
+### 遗留
+
+- 背景是装饰，`aria-hidden="true"`；`page-bg.js` 整段 try/catch，取不到就静默不显示，不影响任何功能。
+- 换图要改文件名或加 `?v=2`：nginx 给 svg 设了 30 天 immutable 缓存。
+- 素材版权要自己确认（这次是用户提供的 `halloween-bg-v5.svg`）。
